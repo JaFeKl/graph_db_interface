@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "graph-db-interface"
+version = "0.1.0"
+description = "A simple interface to interact with a GraphDB instance used in the SFB1574"
+authors = ["Jan-Felix Klein <jan-felix.klein@kit.edu>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.8.10"
+sparqlwrapper = "^2.0.0"
+
+[tool.poetry.dev-dependencies]
+pytest = "^8.3.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

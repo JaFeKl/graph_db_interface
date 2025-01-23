@@ -1,0 +1,74 @@
+# Byte-compiled files
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Distribution and packaging
+*.egg
+*.egg-info/
+dist/
+build/
+*.egg-info/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Test and coverage
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+*.tox/
+.tox/
+*.nox/
+.nox/
+*.coverage
+*.hypothesis/
+.coverage.*
+.cache
+nosetests.xml
+
+# MyPy
+.mypy_cache/
+
+# Pyre type checker
+.pyre/
+
+# Environment
+.env
+.venv/
+ENV/
+env/
+venv/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.suo
+*.ntvs_analysis.dat
+*.ncb
+*.swp
+*.swo
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Docker
+docker-compose.override.yml
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# PyCharm
+.idea/
+
+# Python-specific
+pylint-report.txt
+
+# Pytest cache
+.pytest_cache/
