@@ -247,35 +247,20 @@ class GraphDBinterface():
                 if not self.triple_exists(old_subject, old_predicate, old_object, named_graph=named_graph):
                     self._logger.warning("Unable to update triple since it does not exist")
                     return False
-
+            query = f"""
+                DELETE {{
+                    {old_subject} {old_predicate} {old_object} .
+                }}
+                INSERT {{
+                    {new_subject} {new_predicate} {new_object} .
+                }}
+                WHERE {{
+                    {old_subject} {old_predicate} {old_object} .
+                }}
+            """
             if named_graph:
-                query = f"""
-                    WITH <{named_graph}>
-                    DELETE {{
-                        {old_subject} {old_predicate} {old_object} .
-                    }}
-                    INSERT {{
-                        {new_subject} {new_predicate} {new_object} .
-                    }}
-                    WHERE {{
-                        {old_subject} {old_predicate} {old_object} .
-                    }}
-                """
-            else:
-                query = f"""
-                    DELETE {{
-                        {old_subject} {old_predicate} {old_object} .
-                    }}
-                    INSERT {{
-                        {new_subject} {new_predicate} {new_object} .
-                    }}
-                    WHERE {{
-                        {old_subject} {old_predicate} {old_object} .
-                    }}
-                """
-            
-            self._logger.info(query)
-
+                query = f"WITH <{named_graph}> " + query
+            self._logger.debug(query)
             self.sparql.setMethod(POST)
             self.sparql.setQuery(query)
             result = self.sparql.query()
@@ -285,5 +270,39 @@ class GraphDBinterface():
             else:
                 return False
 
+        except Exception as e:
+            self._logger.error(f"Failed to update triple, error {e}")
+
+    def triple_update_object(
+            self,
+            subject: str,
+            predicate: str,
+            new_object,
+            named_graph: str = None) -> bool:
+
+        self.sparql.endpoint = f"{self._base_url}/repositories/{self.repository}/statements"
+        try:
+            query = f"""
+                DELETE {{
+                    {subject} {predicate} ?oldObject .
+                }}
+                INSERT {{
+                    {subject} {predicate} {new_object} .
+                }}
+                WHERE {{
+                    {subject} {predicate} ?oldObject .
+                }}
+            """
+            if named_graph:
+                query = f"WITH <{named_graph}> " + query
+            self._logger.debug(query)
+            self.sparql.setMethod(POST)
+            self.sparql.setQuery(query)
+            result = self.sparql.query()
+            if result.response.status == 204:
+                self._logger.debug(f"Successfully updated triple to: {subject} {predicate} {new_object} named_graph: {named_graph}, repository: {self._repository}")
+                return True
+            else:
+                return False
         except Exception as e:
             self._logger.error(f"Failed to update triple, error {e}")

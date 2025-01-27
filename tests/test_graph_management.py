@@ -1,4 +1,4 @@
-from graph_db_interface.src.graph_db_interface.graph_db_interface import GraphDBinterface
+from graph_db_interface.graph_db_interface import GraphDBinterface
 
 interface = GraphDBinterface(username="test", password="test123")
 

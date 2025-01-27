@@ -1,5 +1,5 @@
 import pytest
-from graph_db_interface.src.graph_db_interface.graph_db_interface import GraphDBinterface
+from graph_db_interface.graph_db_interface import GraphDBinterface
 
 
 def test_credentials_valid():
