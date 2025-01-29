@@ -11,7 +11,7 @@ new_subject = "<http://example.org/new_subject>"
 new_predicate = "<http://example.org/new_predicate>"
 new_object = "'0.7'^^xsd:double"
 
-named_graph = "https://my_named_test_graph"
+named_graph = "<https://my_named_test_graph>"
 
 
 @pytest.mark.parametrize("named_graph", [
@@ -39,10 +39,49 @@ def test_manipulate_graph(named_graph):
     result = interface.triple_exists(new_subject, new_predicate, new_object, named_graph=named_graph)
     assert (result is True)
 
-    # only update the object of the triple
-    result = interface.triple_update_object(new_subject, new_predicate, object, named_graph=named_graph)
+    # only update the subject of the triple
+    result = interface.triple_update_any(new_subject, new_predicate, new_object, new_subject=subject, named_graph=named_graph)
     assert (result is True)
 
-    # Now we can delete the triple
-    result = interface.triple_delete(new_subject, new_predicate, object, named_graph=named_graph)
+    # only update the predicate of the triple
+    result = interface.triple_update_any(subject, new_predicate, new_object, new_predicate=predicate, named_graph=named_graph)
+    assert (result is True)
+
+    # only update the object of the triple
+    result = interface.triple_update_any(subject, predicate, new_object, new_object=object, named_graph=named_graph)
+    assert (result is True)
+
+    # # Now we can delete the triple
+    result = interface.triple_delete(subject, predicate, object, named_graph=named_graph)
+    assert (result is True)
+
+
+@pytest.mark.parametrize("named_graph", [
+    None,         # Test1: All operations are performed on the default graph
+    named_graph   # Test2: All operations are performed on a named graph
+])
+def test_iri_exists(named_graph):
+    # add a new triple to the default graph
+    result = interface.triple_add(subject, predicate, object, named_graph=named_graph)
+    assert (result is True)
+
+    result = interface.iri_exists(subject, named_graph=named_graph)
+    assert (result is False)
+
+    result = interface.iri_exists(subject, as_subject=True, named_graph=named_graph)
+    assert (result is True)
+
+    result = interface.iri_exists(subject, as_subject=True, as_predicate=True, named_graph=named_graph)
+    assert (result is True)
+
+    result = interface.iri_exists(predicate, as_predicate=True, named_graph=named_graph)
+    assert (result is True)
+
+    result = interface.iri_exists(subject, as_object=True, named_graph=named_graph)
+    assert (result is False)
+
+    result = interface.iri_exists(subject, as_predicate=True)
+    assert (result is False)
+
+    result = interface.triple_delete(subject, predicate, object, named_graph=named_graph)
     assert (result is True)
