@@ -1,40 +1,41 @@
 import logging
 import requests
 from SPARQLWrapper import SPARQLWrapper, JSON, POST, GET, QueryResult
-from typing import List, Optional
-from enum import Enum
+from typing import List, Union
+import graph_db_interface.utils.utils as utils
 
 
-class RepositoryNames(Enum):
-    REPO_PLAYGROUND = "Playground"
-    REPO_DEVELOPMENT = "Development"
-    REPO_PRODUCTION = "Production"
-
-
-class GraphDBinterface():
-    """A generic sparql interface to allow easy interactions with a knowledge graph
+class GraphDB():
+    """A GraphDB interface that abstracts SPARQL queries to a small set of pre-defined class methods.
     """
     def __init__(self,
+                 base_url: str,
                  username: str,
                  password: str,
-                 base_url: str = "https://graphdb.iam-mms.kit.edu",
-                 repository: str = "Playground"):
-        self._logger = logging.getLogger("graph_db_interface")
+                 repository: str,
+                 logger_name: str = "graph_db"):
+        self._logger = logging.getLogger(logger_name)
+        self._base_url = base_url
         self._username = username
         self._password = password
-        self._base_url = base_url
         self._token = self._get_authentication_token(self._username, self._password)
         self._header = {"Authorization": self._token, "Accept": "application/json"}
+        self._repositories = self.get_list_of_repositories(only_ids=True)
         self._repository = self._validate_repository(repository)
         self._initialize_sparql_wrapper()
         self._logger.info(f"Connected to GraphDB. User: {self._username}, Repository: {self.repository}")
+        self._prefixes = {}
+        self._add_prefix("owl", "<http://www.w3.org/2002/07/owl#>")
+        self._add_prefix("rdf", "<http://www.w3.org/1999/02/22-rdf-syntax-ns#>")
+        self._add_prefix("rdfs", "<http://www.w3.org/2000/01/rdf-schema#>")
+        self._add_prefix("onto", "<http://www.ontotext.com/>")
 
-    @staticmethod
-    def _validate_repository(repository: str) -> str:
+    def _validate_repository(self, repository: str) -> str:
         """Validates if the repository is part of the RepositoryNames enum."""
-        if repository not in [repo.value for repo in RepositoryNames]:
+        if repository not in self._repositories:
+            print(self._repositories)
             raise ValueError(
-                f"Invalid repository name. Allowed values are: {', '.join([repo.value for repo in RepositoryNames])}."
+                f"Invalid repository name. Allowed values are: {', '.join([repository for repository in self._repositories])}."
             )
         return repository
 
@@ -81,21 +82,19 @@ class GraphDBinterface():
             self._logger.error(f"Failed to obtain gdb token: {response.status_code}: {response.text}")
             raise ValueError("You were unable to obtain a token given your provided credentials. Please make sure, that your provided credentials are valid.")
 
-    def get_list_of_repositories(self) -> Optional[List[str]]:
-        """Get a list of all existing repositories on the GraphDB instance.
+    def _add_prefix(self, prefix: str, iri: str):
+        self._prefixes[prefix] = iri
 
-        Returns:
-            Optional[List[str]]: Returns a list of repository ids.
-        """
-        url = f"{self._base_url}/rest/repositories"
-        response = requests.get(url, headers=self._header)
+    def _get_prefix_string(self) -> str:
+        return "\n".join(f"PREFIX {prefix}: {iri}" for prefix, iri in self._prefixes.items()) + "\n"
 
-        if response.status_code == 200:
-            repositories = response.json()
-            return repositories
+    def _named_graph_string(self, named_graph: str = None) -> str:
+        if named_graph:
+            return f"GRAPH {named_graph}"
         else:
-            self._logger.warning(f"Failed to list repositories: {response.status_code}: {response.text}")
-            return None
+            return ""
+
+    """ GraphDB Management """
 
     def get_list_of_named_graphs(self) -> List:
         """Get a list of named graphs in the currently set repository.
@@ -116,7 +115,74 @@ class GraphDBinterface():
         results = self.sparql.query().convert()
         return [result["graph"]["value"] for result in results["results"]["bindings"]]
 
-    def query(self, query: str, method=GET) -> QueryResult:
+    def get_list_of_repositories(self, only_ids: bool = False) -> Union[List[str], List[dict], None]:
+        """Get a list of all existing repositories on the GraphDB instance.
+
+        Returns:
+            Optional[List[str]]: Returns a list of repository ids.
+        """
+        url = f"{self._base_url}/rest/repositories"
+        response = requests.get(url, headers=self._header)
+
+        if response.status_code == 200:
+            repositories = response.json()
+            if only_ids:
+                return [repo["id"] for repo in repositories]
+            return repositories
+        else:
+            self._logger.warning(f"Failed to list repositories: {response.status_code}: {response.text}")
+            return None
+
+    """ Utility """
+    def _set_explicit(self, query: str) -> str:
+        return utils.insert_before_where_clause(query=query, from_statement="FROM onto:explicit")
+
+    def _set_implicit(self, query: str) -> str:
+        return utils.insert_before_where_clause(query=query, from_statement="FROM onto:implicit")
+
+    """RDF4J REST API - SPARQL : SPARQL Query and Update execution"""
+
+    def query(self,
+              query: str,
+              method=GET,
+              include_explicit: bool = True,
+              include_implicit: bool = True) -> QueryResult:
+
+        """
+        Executes a SPARQL query with optional handling of explicit and implicit statements.
+
+        This method sends a SPARQL query to the specified endpoint using either the GET or POST method.
+        It also allows the inclusion of explicit and/or implicit statements based on the provided flags.
+
+        Args:
+            query (str):
+                The SPARQL query string to be executed.
+
+            method (str, optional):
+                The HTTP method to be used for the query. It can be either 'GET' or 'POST'.
+                - 'GET' is typically used for simpler queries that don't modify data.
+                - 'POST' is used when making statements to the repository.
+                Defaults to 'GET'.
+
+            include_explicit (bool, optional):
+                If True, explicit statements are included in the query.
+                If False, explicit statements are excluded. Defaults to True.
+
+            include_implicit (bool, optional):
+                If True, implicit statements are included in the query. Defaults to True.
+                If False, implicit statements are excluded. Defaults to True.
+
+        Returns:
+            QueryResult:
+                The result of the executed SPARQL query. Defined in the SPARQLWrapper package.
+                This object encapsulates the query result and may include data such as bindings,
+                errors, or status information.
+
+        Notes:
+            - The query is first prefixed with all prefixes defined using `_add_prefix`.
+            - The `method` determines the RDF4J endpoint used for the query.
+            - If an unsupported `method` is provided, an error is logged, and the query is ignored.
+        """
         if method == GET:
             self.sparql.endpoint = f"{self._base_url}/repositories/{self._repository}"
         elif method == POST:
@@ -124,15 +190,20 @@ class GraphDBinterface():
         else:
             self._logger.error(f"Cannot set query method {method}! Query is ignored.")
             return
+        # add prefixes in front of Query
+        query = f"""
+        {self._get_prefix_string()}
+        {query}
+        """
+        if include_explicit and not include_implicit:
+            query = self._set_explicit(query)
+        elif include_implicit and not include_explicit:
+            query = self._set_implicit(query)
         self.sparql.setMethod(method)
         self.sparql.setQuery(query)
         return self.sparql.query()
 
-    def _named_graph_string(self, named_graph: str = None) -> str:
-        if named_graph:
-            return f"GRAPH {named_graph}"
-        else:
-            return ""
+    """ GET """
 
     def iri_exists(
             self,
@@ -140,16 +211,20 @@ class GraphDBinterface():
             as_subject: bool = False,
             as_predicate: bool = False,
             as_object: bool = False,
-            use_predicate_filter: bool = True,
+            filters: dict = None,
+            include_explicit: bool = True,
+            include_implicit: bool = True,
             named_graph: str = None) -> bool:
         """Check if a given IRI exists.
 
         Args:
-            iri (str): An explicit IRI, e.g. <http://example.org/subject>
-            as_subject (bool, optional): If the IRI should be used searched for as a subject. Defaults to False.
-            as_predicate (bool, optional): If the IRI should be used searched for as a predicate. Defaults to False.
-            as_object (bool, optional): If the IRI should be used searched for as a object. Defaults to False.
-            use_predicate_filter (bool, optional): If a filter on a specific set of predicates should be applied. Defaults to True.
+            iri (str): An IRI, e.g. absolute <http://example.org/subject> or prefixed, e.g. ex:subject
+            as_subject (bool, optional): If the IRI should be searched for as a subject. Defaults to False.
+            as_predicate (bool, optional): If the IRI should be searched for as a predicate. Defaults to False.
+            as_object (bool, optional): If the IRI should be searched for as a object. Defaults to False.
+            filters (dict, optional): A dictionary that maps list of IRIS to either 's', 'p', 'o' and defines if triples that match
+                these cases should be ignored. Defaults to None. E.g. filters = {'p' = [<http://example.org/predicate>]}
+
             named_graph (str, optional): A specific named graph to query in. Defaults to None.
 
         Returns:
@@ -169,14 +244,17 @@ class GraphDBinterface():
             self._logger.warning("No clauses defined in which to search the IRI for, returning False")
             return False
 
-        # Filter for unwanted predicates
-        if use_predicate_filter:
-            filter = "FILTER (?p != <http://www.w3.org/2002/07/owl#sameAs> && ?p != <http://www.w3.org/1999/02/22-rdf-syntax-ns#type>)"
-        else:
-            filter = ""
+        # Generate FILTER conditions dynamically
+        filter_conditions = []
+        if filters:
+            for var, values in filters.items():
+                if values:
+                    conditions = " && ".join([f"?{var} != {value}" for value in values])
+                    filter_conditions.append(f"FILTER ({conditions})")
 
-        query = f"ASK WHERE {{ {self._named_graph_string(named_graph)} {{ {' UNION '.join(clauses)} {filter}}} }}"
-        result = self.query(query=query, method=GET)
+        filter_clause = " ".join(filter_conditions)
+        query = f"ASK WHERE {{ {self._named_graph_string(named_graph)} {{ {' UNION '.join(clauses)} {filter_clause}}} }}"
+        result = self.query(query=query, method=GET, include_explicit=include_explicit, include_implicit=include_implicit)
         result = result.convert()
         if result["boolean"] is True:
             self._logger.debug(f"Found IRI {iri}")
@@ -212,6 +290,38 @@ class GraphDBinterface():
         else:
             self._logger.debug(f"Unable to find triple {subject}, {predicate}, {object}, named_graph: {named_graph}, repository: {self._repository}")
             return False
+
+    def triple_get_subjects(self, predicate: str, object: str) -> List[str]:
+        query = f"""
+        SELECT ?subject
+        WHERE {{
+            ?subject {predicate} {object} .
+        }}
+        """
+        results = self.query(query=query, method=GET).convert()
+        return [result['subject']['value'] for result in results['results']['bindings']]
+
+    def triple_get_predicates(self, subject: str, object: str) -> List[str]:
+        query = f"""
+        SELECT ?predicate
+        WHERE {{
+            {subject} ?predicate {object} .
+        }}
+        """
+        results = self.query(query=query, method=GET).convert()
+        return [result['predicate']['value'] for result in results['results']['bindings']]
+
+    def triple_get_objects(self, subject: str, predicate: str) -> List[str]:
+        query = f"""
+        SELECT ?object
+        WHERE {{
+            {subject} {predicate} ?object .
+        }}
+        """
+        results = self.query(query=query, method=GET).convert()
+        return [result['object']['value'] for result in results['results']['bindings']]
+
+    """ POST """
 
     def triple_add(self, subject: str, predicate: str, object: str, named_graph: str = None) -> bool:
         """Add a single triple either to the default graph or to a named graph
@@ -280,83 +390,9 @@ class GraphDBinterface():
 
     def triple_update(
             self,
-            old_subject: str,
-            old_predicate: str,
-            old_object: str,
-            new_subject: str,
-            new_predicate: str,
-            new_object: str,
-            named_graph: str = None,
-            check_exist: bool = True) -> bool:
-        """
-        Updates a triple in the RDF store by replacing an existing triple with a new one.
-
-        This function performs a SPARQL `DELETE ... INSERT ... WHERE` update to remove an old triple
-        and insert a new one. Optionally, it can check if the old triple exists before attempting
-        the update.
-
-        Args:
-            old_subject (str): The subject of the triple to be updated.
-            old_predicate (str): The predicate of the triple to be updated.
-            old_object (str): The object of the triple to be updated.
-            new_subject (str): The subject of the new triple to be inserted.
-            new_predicate (str): The predicate of the new triple to be inserted.
-            new_object (str): The object of the new triple to be inserted.
-            named_graph (str, optional): The named graph where the triple update should be performed.
-                                        Defaults to `None`, meaning the default graph is used.
-            check_exist (bool, optional): If `True`, the function first checks if the old triple exists
-                                        before attempting an update. Defaults to `True`.
-
-        Returns:
-            bool: `True` if the update was successful, `False` otherwise.
-
-        Raises:
-            Any exceptions thrown by `self.query()` if the SPARQL update request fails.
-
-        Example:
-            ```python
-            success = rdf_store.triple_update(
-                old_subject="<http://example.org/oldSubject>",
-                old_predicate="<http://example.org/oldPredicate>",
-                old_object="<http://example.org/oldObject>",
-                new_subject="<http://example.org/newSubject>",
-                new_predicate="<http://example.org/newPredicate>",
-                new_object="<http://example.org/newObject>",
-                named_graph="<http://example.org/graph>",
-                check_exist=True
-            )
-            ```
-        """
-
-        if check_exist:
-            if not self.triple_exists(old_subject, old_predicate, old_object, named_graph=named_graph):
-                self._logger.warning("Unable to update triple since it does not exist")
-                return False
-        query = f"""
-            DELETE {{
-                {old_subject} {old_predicate} {old_object} .
-            }}
-            INSERT {{
-                {new_subject} {new_predicate} {new_object} .
-            }}
-            WHERE {{
-                {old_subject} {old_predicate} {old_object} .
-            }}
-        """
-        if named_graph:
-            query = f"WITH {named_graph} " + query
-        result = self.query(query=query, method=POST)
-        if result.response.status == 204:
-            self._logger.debug(f"Successfully updated triple to: {new_subject} {new_predicate} {new_object} named_graph: {named_graph}, repository: {self._repository}")
-            return True
-        else:
-            return False
-
-    def triple_update_any(
-            self,
             old_subject: str = None,
             old_predicate: str = None,
-            old_object: str = None,
+            old_object: str = "?o",
             new_subject: str = None,
             new_predicate: str = None,
             new_object: str = None,
@@ -442,3 +478,39 @@ class GraphDBinterface():
                                  f"named_graph: {named_graph}, repository: {self._repository}, "
                                  f"status code: {result.response.status}")
             return False
+
+    """ Convenience """
+
+    def is_subclass(self, subclass_iri: str, class_iri: str) -> bool:
+        return self.triple_exists(subclass_iri, "rdfs:subClassOf", class_iri)
+
+    def owl_is_named_individual(self, iri: str) -> bool:
+        if not self.triple_exists(iri, "rdf:type", "owl:NamedIndividual"):
+            self._logger.warning(f"IRI {iri} is not a named individual!")
+            return False
+        else:
+            return True
+
+    def owl_get_classes_of_individual(
+            self,
+            instance_iri: str,
+            ignored_prefixes: List[str] = ["owl", "rdfs"],
+            local_name: bool = True) -> List[str]:
+        if len(ignored_prefixes) > 0:
+            filter_conditions = "FILTER (" + " && ".join([f"!STRSTARTS(STR(?class), STR({prefix}:))" for prefix in ignored_prefixes]) + ")"
+        else:
+            filter_conditions = ""
+
+        query = f"""
+        SELECT ?class
+        WHERE {{
+            ?class rdf:type owl:Class .
+            {instance_iri} rdf:type ?class .
+                {filter_conditions}
+        }}
+        """
+        results = self.query(query=query, method=GET).convert()
+        classes = [result['class']['value'] for result in results['results']['bindings']]
+        if local_name is True:
+            classes = [utils.get_local_name(iri) for iri in classes]
+        return classes
