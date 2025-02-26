@@ -24,3 +24,40 @@ SELECT *
 """
     result = utils.insert_before_where_clause(query=query, from_statement=from_clause)
     assert (expected_query == result)
+
+
+def test_ensure_absolute():
+    iri = "http://www.sfb1574.kit.edu/core"
+    absolute_iri = utils.ensure_absolute("http://www.sfb1574.kit.edu/core")
+    assert (f"<{iri}>" == absolute_iri)
+
+
+def test_strip_angle_brackets():
+    iri = "http://www.sfb1574.kit.edu/core"
+    absolute_iri = f"<{iri}>"
+    assert (iri == utils.strip_angle_brackets(absolute_iri))
+
+
+def test_to_xsd_literal():
+    literal = utils.to_xsd_literal(42)
+    assert (type(literal.value) is int)
+
+    literal = utils.to_xsd_literal(True)
+    assert (type(literal.value) is bool)
+
+    literal = utils.to_xsd_literal(42.5)
+    assert (type(literal.value) is float)
+
+
+def test_from_xsd_literal():
+    value = utils.from_xsd_literal('42', "http://www.w3.org/2001/XMLSchema#integer")
+    assert (value == 42)
+
+    value = utils.from_xsd_literal('true', "http://www.w3.org/2001/XMLSchema#boolean")
+    assert (value is True)
+
+    value = utils.from_xsd_literal('42.5', "http://www.w3.org/2001/XMLSchema#float")
+    assert (value == 42.5)
+
+    value = utils.from_xsd_literal('42.5', "http://www.w3.org/2001/XMLSchema#double")
+    assert (value == 42.5)

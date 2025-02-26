@@ -1,7 +1,9 @@
 import logging
 import requests
-from SPARQLWrapper import SPARQLWrapper, JSON, POST, GET, QueryResult
-from typing import List, Union
+from requests import Response
+from rdflib import Literal
+from SPARQLWrapper import SPARQLWrapper, JSON, POST, QueryResult
+from typing import List, Union, Any
 import graph_db_interface.utils.utils as utils
 
 
@@ -144,7 +146,7 @@ class GraphDB():
 
     def query(self,
               query: str,
-              method=GET,
+              update: bool = False,
               include_explicit: bool = True,
               include_implicit: bool = True) -> QueryResult:
 
@@ -158,11 +160,10 @@ class GraphDB():
             query (str):
                 The SPARQL query string to be executed.
 
-            method (str, optional):
-                The HTTP method to be used for the query. It can be either 'GET' or 'POST'.
-                - 'GET' is typically used for simpler queries that don't modify data.
-                - 'POST' is used when making statements to the repository.
-                Defaults to 'GET'.
+            update (bool, optional):
+                If True, the /repositories/{repositoryID}/statements endpoint is being used with 'POST'
+                If False, the /repositories/{repositoryID} endpoint is used with 'POST'
+                Defaults to 'False'.
 
             include_explicit (bool, optional):
                 If True, explicit statements are included in the query.
@@ -183,13 +184,11 @@ class GraphDB():
             - The `method` determines the RDF4J endpoint used for the query.
             - If an unsupported `method` is provided, an error is logged, and the query is ignored.
         """
-        if method == GET:
+        if update is False:
             self.sparql.endpoint = f"{self._base_url}/repositories/{self._repository}"
-        elif method == POST:
-            self.sparql.endpoint = f"{self._base_url}/repositories/{self.repository}/statements"
         else:
-            self._logger.error(f"Cannot set query method {method}! Query is ignored.")
-            return
+            self.sparql.endpoint = f"{self._base_url}/repositories/{self.repository}/statements"
+
         # add prefixes in front of Query
         query = f"""
         {self._get_prefix_string()}
@@ -199,7 +198,7 @@ class GraphDB():
             query = self._set_explicit(query)
         elif include_implicit and not include_explicit:
             query = self._set_implicit(query)
-        self.sparql.setMethod(method)
+        self.sparql.setMethod(POST)
         self.sparql.setQuery(query)
         return self.sparql.query()
 
@@ -254,7 +253,7 @@ class GraphDB():
 
         filter_clause = " ".join(filter_conditions)
         query = f"ASK WHERE {{ {self._named_graph_string(named_graph)} {{ {' UNION '.join(clauses)} {filter_clause}}} }}"
-        result = self.query(query=query, method=GET, include_explicit=include_explicit, include_implicit=include_implicit)
+        result = self.query(query=query, update=False, include_explicit=include_explicit, include_implicit=include_implicit)
         result = result.convert()
         if result["boolean"] is True:
             self._logger.debug(f"Found IRI {iri}")
@@ -263,7 +262,7 @@ class GraphDB():
             self._logger.debug(f"Unable to find IRI {iri}, check if you successfully")
             return False
 
-    def triple_exists(self, subject: str, predicate: str, object: str, named_graph: str = None) -> bool:
+    def triple_exists(self, subject: str, predicate: str, object: Union[str, Literal], named_graph: str = None) -> bool:
         """Checks if a specified triple exists in the repository
 
         Args:
@@ -282,7 +281,7 @@ class GraphDB():
                 }}
             }}
         """
-        results = self.query(query=query, method=GET)
+        results = self.query(query=query, update=False)
         results = self.sparql.query().convert()
         if results["boolean"] is True:
             self._logger.debug(f"Found triple {subject}, {predicate}, {object}")
@@ -298,7 +297,7 @@ class GraphDB():
             ?subject {predicate} {object} .
         }}
         """
-        results = self.query(query=query, method=GET).convert()
+        results = self.query(query=query, update=False).convert()
         return [result['subject']['value'] for result in results['results']['bindings']]
 
     def triple_get_predicates(self, subject: str, object: str) -> List[str]:
@@ -308,22 +307,34 @@ class GraphDB():
             {subject} ?predicate {object} .
         }}
         """
-        results = self.query(query=query, method=GET).convert()
+        results = self.query(query=query, update=False).convert()
         return [result['predicate']['value'] for result in results['results']['bindings']]
 
-    def triple_get_objects(self, subject: str, predicate: str) -> List[str]:
+    def triple_get_objects(self, subject: str, predicate: str) -> List[Any]:
         query = f"""
         SELECT ?object
         WHERE {{
             {subject} {predicate} ?object .
         }}
         """
-        results = self.query(query=query, method=GET).convert()
-        return [result['object']['value'] for result in results['results']['bindings']]
+        results = self.query(query=query, update=False).convert()
+
+        converted_results = []  # given the values are literals, we try to convert them
+
+        for result in results['results']['bindings']:
+            obj = result['object']
+            obj_value = obj['value']
+            obj_type = obj.get('datatype')
+            if obj_type:
+                converted_results.append(utils.from_xsd_literal(obj_value, obj_type))
+            else:
+                converted_results.append(obj_value)
+
+        return converted_results
 
     """ POST """
 
-    def triple_add(self, subject: str, predicate: str, object: str, named_graph: str = None) -> bool:
+    def triple_add(self, subject: str, predicate: str, object: Union[str, Literal], named_graph: str = None) -> bool:
         """Add a single triple either to the default graph or to a named graph
 
         Args:
@@ -342,14 +353,14 @@ class GraphDB():
                 }}
             }}
         """
-        result = self.query(query=query, method=POST)
+        result = self.query(query=query, update=True)
         if result.response.status == 204:
             self._logger.debug(f"New triple inserted: {subject}, {predicate}, {object} named_graph: {named_graph}, repository: {self._repository}")
             return True
         else:
             return False
 
-    def triple_delete(self, subject: str, predicate: str, object: str, named_graph: str = None, check_exist: bool = True) -> bool:
+    def triple_delete(self, subject: str, predicate: str, object: Union[str, Literal], named_graph: str = None, check_exist: bool = True) -> bool:
         """Delete a single triple. A SPAQRL delete query will be successfull, even though the triple to delete does not exist in the first place.
 
         Args:
@@ -380,7 +391,7 @@ class GraphDB():
                         {subject} {predicate} {object} .
                     }}
             """
-        result = self.query(query=query, method=POST)
+        result = self.query(query=query, update=True)
         if result.response.status == 204:
             self._logger.debug(f"Successfully deleted triple: {subject} {predicate} {object}")
             return True
@@ -392,10 +403,10 @@ class GraphDB():
             self,
             old_subject: str = None,
             old_predicate: str = None,
-            old_object: str = "?o",
+            old_object: Union[str, Literal] = "?o",
             new_subject: str = None,
             new_predicate: str = None,
-            new_object: str = None,
+            new_object: Union[str, Literal] = None,
             named_graph: str = None,
             check_exist: bool = True) -> bool:
         """
@@ -467,7 +478,7 @@ class GraphDB():
             query = f"WITH {named_graph} " + query
 
         self._logger.debug(query)
-        result = self.query(query=query, method=POST)
+        result = self.query(query=query, update=True)
 
         if result.response.status == 204:
             self._logger.debug(f"Successfully updated triple to: {update_subject} {update_predicate} {update_object}, "
@@ -478,6 +489,43 @@ class GraphDB():
                                  f"named_graph: {named_graph}, repository: {self._repository}, "
                                  f"status code: {result.response.status}")
             return False
+
+    """RDF4J REST API - Graph Store : Named graph management"""
+
+    def named_graph_add(
+            self,
+            content: str,
+            graph_uri: str,
+            content_type: str = 'application/x-turtle',
+            clear_existing: bool = True):
+        """
+        Add statements to a directly referenced named graph. Overrides all existing statements in this graph.
+        """
+
+        headers = {'Content-Type': content_type}
+        endpoint = f'{self._base_url}/repositories/{self._repository}/rdf-graphs/service?graph={graph_uri}'
+        response: Response = requests.put(endpoint, headers=headers, auth=(self._username, self._password), data=content)
+        if response.status_code == 204:
+            self._logger.debug(f"Named graph {graph_uri} created successfully!")
+        else:
+            self._logger.warning(f"Failed to update named graph: {response.status_code} - {response.text}")
+        return response
+
+    def named_graph_delete(
+            self,
+            graph_uri: str):
+        """
+        Deletes the specified named graph from the triplestore.
+        """
+
+        endpoint = f'{self._base_url}/repositories/{self._repository}/rdf-graphs/service?graph={graph_uri}'
+        response: Response = requests.delete(endpoint, auth=(self._username, self._password))
+
+        if response.status_code == 204:
+            self._logger.debug(f"Named graph {graph_uri} deleted successfully!")
+        else:
+            self._logger.warning(f"Failed to delete named graph: {response.status_code} - {response.text}")
+        return response
 
     """ Convenience """
 
@@ -509,7 +557,7 @@ class GraphDB():
                 {filter_conditions}
         }}
         """
-        results = self.query(query=query, method=GET).convert()
+        results = self.query(query=query, update=False).convert()
         classes = [result['class']['value'] for result in results['results']['bindings']]
         if local_name is True:
             classes = [utils.get_local_name(iri) for iri in classes]

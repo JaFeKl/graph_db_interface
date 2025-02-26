@@ -154,13 +154,13 @@ def test_triple_gets(named_graph):
     assert (result is True)
 
     list_of_subjects = db.triple_get_subjects(predicate, object)
-    assert (list_of_subjects == [utils.remove_brackets(subject)])
+    assert (list_of_subjects == [utils.strip_angle_brackets(subject)])
 
     list_of_predicates = db.triple_get_predicates(subject, object)
-    assert (list_of_predicates == [utils.remove_brackets(predicate)])
+    assert (list_of_predicates == [utils.strip_angle_brackets(predicate)])
 
     list_of_objects = db.triple_get_objects(subject, predicate)
-    assert (list_of_objects == [str(object)])
+    assert (list_of_objects == [object.toPython()])
 
     result = db.triple_delete(subject, predicate, object, named_graph=named_graph)
     assert (result is True)
@@ -200,7 +200,7 @@ def test_convenience_functions(named_graph):
     assert (result is False)
 
     classes = db.owl_get_classes_of_individual(subject, local_name=False)
-    assert (classes == [utils.remove_brackets(object)])
+    assert (classes == [utils.strip_angle_brackets(object)])
 
     result = db.triple_delete(subject, predicate, object, named_graph=named_graph)
     assert (result is True)

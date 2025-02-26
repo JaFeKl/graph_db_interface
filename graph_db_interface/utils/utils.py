@@ -1,7 +1,7 @@
 import re
 import os
 import sys
-from rdflib import URIRef
+from rdflib import URIRef, Literal
 from typing import List
 
 datatype_map = {
@@ -35,7 +35,7 @@ def ensure_absolute(iri: str):
     return f"<{uri}>"
 
 
-def remove_brackets(iri: str) -> str:
+def strip_angle_brackets(iri: str) -> str:
     if iri.startswith("<") and iri.endswith(">"):
         clean_iri = iri[1:-1]  # Remove first and last character
     else:
@@ -43,8 +43,13 @@ def remove_brackets(iri: str) -> str:
     return clean_iri
 
 
-def map_datatype(xsd_type):
-    return datatype_map.get(xsd_type)
+def to_xsd_literal(value):
+    return Literal(value)
+
+
+def from_xsd_literal(value: str, datatype: str):
+    literal = Literal(value, datatype=datatype)
+    return literal.value  # If it's not a literal, return as is (e.g., IRI or variable)
 
 
 def get_local_name(iri: str):
