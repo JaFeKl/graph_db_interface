@@ -7,10 +7,12 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
+    environment:
+        name: pypi
+        url: https://pypi.org/project/graph-db-interface/
     permissions:
         id-token: write  # Needed for OpenID Connect authentication
-        
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
