@@ -7,6 +7,10 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
+    permissions:
+        id-token: write  # Needed for OpenID Connect authentication
+        
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
