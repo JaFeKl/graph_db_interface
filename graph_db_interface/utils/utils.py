@@ -4,12 +4,8 @@ import sys
 from rdflib import URIRef, Literal
 from typing import List
 
-datatype_map = {
-    "http://www.w3.org/2001/XMLSchema#integer": int,
-    "http://www.w3.org/2001/XMLSchema#decimal": float,
-    "http://www.w3.org/2001/XMLSchema#double": float,
-    "http://www.w3.org/2001/XMLSchema#boolean": lambda x: x.lower() == "true",
-}
+
+LOGGER = logging.getLogger(__name__)
 
 
 def ensure_absolute(iri: str):
@@ -83,7 +79,7 @@ def insert_before_where_clause(query: str, from_statement: str) -> str:
         query_with_from = query[:where_pos] + f"{from_statement}\n" + query[where_pos:]
         return query_with_from
     else:
-        print(
+        LOGGER.warning(
             "Unable to insert clause before WHERE, no WHERE found in the given query."
             " Returning the original query..."
         )

@@ -7,6 +7,9 @@ from typing import List, Union, Any
 import graph_db_interface.utils.utils as utils
 
 
+LOGGER = logging.getLogger(__name__)
+
+
 class GraphDB:
     """A GraphDB interface that abstracts SPARQL queries to a small set of pre-defined class methods."""
 
@@ -16,9 +19,7 @@ class GraphDB:
         username: str,
         password: str,
         repository: str,
-        logger_name: str = "graph_db",
     ):
-        self._logger = logging.getLogger(logger_name)
         self._base_url = base_url
         self._username = username
         self._password = password
@@ -27,20 +28,21 @@ class GraphDB:
         self._repositories = self.get_list_of_repositories(only_ids=True)
         self._repository = self._validate_repository(repository)
         self._initialize_sparql_wrapper()
-        self._logger.info(
-            f"Connected to GraphDB. User: {self._username}, Repository:"
-            f" {self.repository}"
-        )
+
         self._prefixes = {}
         self._add_prefix("owl", "<http://www.w3.org/2002/07/owl#>")
         self._add_prefix("rdf", "<http://www.w3.org/1999/02/22-rdf-syntax-ns#>")
         self._add_prefix("rdfs", "<http://www.w3.org/2000/01/rdf-schema#>")
         self._add_prefix("onto", "<http://www.ontotext.com/>")
 
+        LOGGER.info(
+            f"Connected to GraphDB. User: {self._username}, Repository:"
+            f" {self.repository}"
+        )
+
     def _validate_repository(self, repository: str) -> str:
         """Validates if the repository is part of the RepositoryNames enum."""
         if repository not in self._repositories:
-            print(self._repositories)
             raise ValueError(
                 "Invalid repository name. Allowed values are:"
                 f" {', '.join([repository for repository in self._repositories])}."
@@ -89,7 +91,7 @@ class GraphDB:
         if response.status_code == 200:
             return response.headers.get("Authorization")
         else:
-            self._logger.error(
+            LOGGER.error(
                 f"Failed to obtain gdb token: {response.status_code}: {response.text}"
             )
             raise ValueError(
@@ -152,7 +154,7 @@ class GraphDB:
                 return [repo["id"] for repo in repositories]
             return repositories
         else:
-            self._logger.warning(
+            LOGGER.warning(
                 f"Failed to list repositories: {response.status_code}: {response.text}"
             )
             return None
@@ -271,7 +273,7 @@ class GraphDB:
             clauses.append(f"{{?s ?p {iri} . }}")
 
         if not clauses:
-            self._logger.warning(
+            LOGGER.warning(
                 "No clauses defined in which to search the IRI for, returning False"
             )
             return False
@@ -297,10 +299,10 @@ class GraphDB:
         )
         result = result.convert()
         if result["boolean"] is True:
-            self._logger.debug(f"Found IRI {iri}")
+            LOGGER.debug(f"Found IRI {iri}")
             return True
         else:
-            self._logger.debug(f"Unable to find IRI {iri}")
+            LOGGER.debug(f"Unable to find IRI {iri}")
             return False
 
     def triple_exists(
@@ -331,10 +333,10 @@ class GraphDB:
         results = self.query(query=query, update=False)
         results = self.sparql.query().convert()
         if results["boolean"] is True:
-            self._logger.debug(f"Found triple {subject}, {predicate}, {object}")
+            LOGGER.debug(f"Found triple {subject}, {predicate}, {object}")
             return True
         else:
-            self._logger.debug(
+            LOGGER.debug(
                 f"Unable to find triple {subject}, {predicate}, {object}, named_graph:"
                 f" {named_graph}, repository: {self._repository}"
             )
@@ -413,9 +415,9 @@ class GraphDB:
         """
         result = self.query(query=query, update=True)
         if result.response.status == 204:
-            self._logger.debug(
+            LOGGER.debug(
                 f"New triple inserted: {subject}, {predicate}, {object} named_graph:"
-                " {named_graph}, repository: {self._repository}"
+                f" {named_graph}, repository: {self._repository}"
             )
             return True
         else:
@@ -443,7 +445,7 @@ class GraphDB:
         """
         if check_exist:
             if not self.triple_exists(subject, predicate, object, named_graph):
-                self._logger.warning("Unable to delete triple since it does not exist")
+                LOGGER.warning("Unable to delete triple since it does not exist")
                 return False
         if named_graph:
             query = f"""
@@ -461,14 +463,10 @@ class GraphDB:
             """
         result = self.query(query=query, update=True)
         if result.response.status == 204:
-            self._logger.debug(
-                f"Successfully deleted triple: {subject} {predicate} {object}"
-            )
+            LOGGER.debug(f"Successfully deleted triple: {subject} {predicate} {object}")
             return True
         else:
-            self._logger.warning(
-                f"Failed to delete triple: {subject} {predicate} {object}"
-            )
+            LOGGER.warning(f"Failed to delete triple: {subject} {predicate} {object}")
             return False
 
     def triple_update(
@@ -517,14 +515,14 @@ class GraphDB:
         """
 
         if not (old_subject and old_predicate and old_object):
-            self._logger.warning(
+            LOGGER.warning(
                 "All parts of the old triple (subject, predicate, object) must be"
                 " provided."
             )
             return False
 
         if new_subject is None and new_predicate is None and new_object is None:
-            self._logger.warning(
+            LOGGER.warning(
                 "At least one of new_subject, new_predicate, or new_object must be"
                 " provided."
             )
@@ -534,7 +532,7 @@ class GraphDB:
             if not self.triple_exists(
                 old_subject, old_predicate, old_object, named_graph=named_graph
             ):
-                self._logger.warning(
+                LOGGER.warning(
                     f"Triple does not exist: {old_subject} {old_predicate} {old_object}"
                 )
                 return False
@@ -560,18 +558,18 @@ class GraphDB:
         if named_graph:
             query = f"WITH {named_graph} " + query
 
-        self._logger.debug(query)
+        LOGGER.debug(query)
         result = self.query(query=query, update=True)
 
         if result.response.status == 204:
-            self._logger.debug(
+            LOGGER.debug(
                 f"Successfully updated triple to: {update_subject} {update_predicate}"
                 f" {update_object}, named_graph: {named_graph}, repository:"
                 f" {self._repository}"
             )
             return True
         else:
-            self._logger.warning(
+            LOGGER.warning(
                 f"Failed to update triple to: {update_subject} {update_predicate}"
                 f" {update_object}, named_graph: {named_graph}, repository:"
                 f" {self._repository}, status code: {result.response.status}"
@@ -603,9 +601,9 @@ class GraphDB:
             data=content,
         )
         if response.status_code == 204:
-            self._logger.debug(f"Named graph {graph_uri} created successfully!")
+            LOGGER.debug(f"Named graph {graph_uri} created successfully!")
         else:
-            self._logger.warning(
+            LOGGER.warning(
                 f"Failed to update named graph: {response.status_code} -"
                 f" {response.text}"
             )
@@ -625,9 +623,9 @@ class GraphDB:
         )
 
         if response.status_code == 204:
-            self._logger.debug(f"Named graph {graph_uri} deleted successfully!")
+            LOGGER.debug(f"Named graph {graph_uri} deleted successfully!")
         else:
-            self._logger.warning(
+            LOGGER.warning(
                 f"Failed to delete named graph: {response.status_code} - {response.text}"
             )
         return response
@@ -639,7 +637,7 @@ class GraphDB:
 
     def owl_is_named_individual(self, iri: str) -> bool:
         if not self.triple_exists(iri, "rdf:type", "owl:NamedIndividual"):
-            self._logger.warning(f"IRI {iri} is not a named individual!")
+            LOGGER.warning(f"IRI {iri} is not a named individual!")
             return False
         else:
             return True
