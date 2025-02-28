@@ -59,7 +59,7 @@ def get_local_name(iri: str):
         return iri.fragment
     else:
         # Otherwise, split by '/' and return the last segment
-        return iri.split('/')[-1]
+        return iri.split("/")[-1]
 
 
 def extract_where_clause(query: str) -> str:
@@ -83,7 +83,10 @@ def insert_before_where_clause(query: str, from_statement: str) -> str:
         query_with_from = query[:where_pos] + f"{from_statement}\n" + query[where_pos:]
         return query_with_from
     else:
-        print("Unable to insert clause before WHERE, no WHERE found in the given query. Returning the original query...")
+        print(
+            "Unable to insert clause before WHERE, no WHERE found in the given query."
+            " Returning the original query..."
+        )
         return query
 
 
@@ -91,5 +94,8 @@ def check_env_vars(env_vars: List[str]):
     missing_vars = [var for var in env_vars if not os.getenv(var)]
 
     if missing_vars:
-        print(f"Error: Missing environment variables: {', '.join(missing_vars)}", file=sys.stderr)
+        print(
+            f"Error: Missing environment variables: {', '.join(missing_vars)}",
+            file=sys.stderr,
+        )
         sys.exit(1)

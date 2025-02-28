@@ -4,7 +4,13 @@ from graph_db_interface.graph_db_interface import GraphDB
 import graph_db_interface.utils.utils as utils
 
 
-REQUIRED_ENV_VARS = ["GRAPHDB_URL", "GRAPHDB_USER", "GRAPHDB_PASSWORD", "GRAPHDB_REPOSITORY", "GRAPHDB_REPOSITORIES"]
+REQUIRED_ENV_VARS = [
+    "GRAPHDB_URL",
+    "GRAPHDB_USER",
+    "GRAPHDB_PASSWORD",
+    "GRAPHDB_REPOSITORY",
+    "GRAPHDB_REPOSITORIES",
+]
 utils.check_env_vars(REQUIRED_ENV_VARS)
 
 GRAPHDB_URL = os.getenv("GRAPHDB_URL")
@@ -17,7 +23,8 @@ db = GraphDB(
     base_url=GRAPHDB_URL,
     username=GRAPHDB_USER,
     password=GRAPHDB_PASSWORD,
-    repository=GRAPHDB_REPOSITORY)
+    repository=GRAPHDB_REPOSITORY,
+)
 
 
 def test_get_repositories():
@@ -28,5 +35,5 @@ def test_get_repositories():
 
 def test_list_named_graphs():
     named_graphs = db.get_list_of_named_graphs()
-    assert (named_graphs is not None)
-    assert (type(named_graphs == list))
+    assert named_graphs is not None
+    assert type(named_graphs == list)
