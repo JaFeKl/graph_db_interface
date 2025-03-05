@@ -21,7 +21,7 @@ poetry install
 The package uses a single class named `GraphDB`. To use the interface, simply generate an object from this class:
 
 ```python
-from graph_db_interface.graph_db_interface import GraphDB
+from graph_db_interface import GraphDB
 
 myDB = GraphDB(
     base_url=<your_graph_db_url>,

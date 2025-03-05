@@ -1,15 +1,9 @@
+import logging
 import re
-import os
-import sys
 from rdflib import URIRef, Literal
-from typing import List
 
-datatype_map = {
-    "http://www.w3.org/2001/XMLSchema#integer": int,
-    "http://www.w3.org/2001/XMLSchema#decimal": float,
-    "http://www.w3.org/2001/XMLSchema#double": float,
-    "http://www.w3.org/2001/XMLSchema#boolean": lambda x: x.lower() == "true",
-}
+
+LOGGER = logging.getLogger(__name__)
 
 
 def ensure_absolute(iri: str):
@@ -57,9 +51,9 @@ def get_local_name(iri: str):
     # If there's a fragment (i.e., the part after '#')
     if iri.fragment:
         return iri.fragment
-    else:
-        # Otherwise, split by '/' and return the last segment
-        return iri.split("/")[-1]
+
+    # Otherwise, split by '/' and return the last segment
+    return iri.split("/")[-1]
 
 
 def extract_where_clause(query: str) -> str:
@@ -69,8 +63,8 @@ def extract_where_clause(query: str) -> str:
     if match:
         # Return the content inside the curly braces, which is the WHERE clause
         return match.group(0).strip()
-    else:
-        return "No WHERE clause found"
+
+    return "No WHERE clause found"
 
 
 def insert_before_where_clause(query: str, from_statement: str) -> str:
@@ -82,20 +76,9 @@ def insert_before_where_clause(query: str, from_statement: str) -> str:
         where_pos = match.start()  # Start of the WHERE clause
         query_with_from = query[:where_pos] + f"{from_statement}\n" + query[where_pos:]
         return query_with_from
-    else:
-        print(
-            "Unable to insert clause before WHERE, no WHERE found in the given query."
-            " Returning the original query..."
-        )
-        return query
 
-
-def check_env_vars(env_vars: List[str]):
-    missing_vars = [var for var in env_vars if not os.getenv(var)]
-
-    if missing_vars:
-        print(
-            f"Error: Missing environment variables: {', '.join(missing_vars)}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    LOGGER.warning(
+        "Unable to insert clause before WHERE, no WHERE found in the given query."
+        " Returning the original query..."
+    )
+    return query

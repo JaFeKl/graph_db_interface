@@ -1,52 +1,37 @@
 import pytest
-import os
-import graph_db_interface.utils.utils as utils
-from graph_db_interface.graph_db_interface import GraphDB
-
-REQUIRED_ENV_VARS = [
-    "GRAPHDB_URL",
-    "GRAPHDB_USER",
-    "GRAPHDB_PASSWORD",
-    "GRAPHDB_REPOSITORY",
-]
-utils.check_env_vars(REQUIRED_ENV_VARS)
-
-GRAPHDB_URL = os.getenv("GRAPHDB_URL")
-GRAPHDB_USER = os.getenv("GRAPHDB_USER")
-GRAPHDB_PASSWORD = os.getenv("GRAPHDB_PASSWORD")
-GRAPHDB_REPOSITORY = os.getenv("GRAPHDB_REPOSITORY")
+from graph_db_interface import GraphDB
 
 
-def test_credentials_valid():
+def test_credentials_valid(db):
     """Test successfull initialization"""
     try:
         GraphDB(
-            base_url=GRAPHDB_URL,
-            username=GRAPHDB_USER,
-            password=GRAPHDB_PASSWORD,
-            repository=GRAPHDB_REPOSITORY,
+            base_url=db._base_url,
+            username=db._username,
+            password=db._password,
+            repository=db._repository,
         )
     except Exception as e:
         pytest.fail(f"Unexpected error raised: {e}")
 
 
-def test_credentials_invalid():
+def test_credentials_invalid(db):
     """Test invalid credentials used"""
     with pytest.raises(ValueError):
         GraphDB(
-            base_url=GRAPHDB_URL,
-            username=GRAPHDB_USER,
+            base_url=db._base_url,
+            username=db._username,
             password="SomeWrongPassword",
-            repository=GRAPHDB_REPOSITORY,
+            repository=db._repository,
         )
 
 
-def test_invalid_repository():
+def test_invalid_repository(db):
     """Test an invalid selected repository"""
     with pytest.raises(ValueError):
         GraphDB(
-            base_url=GRAPHDB_URL,
-            username=GRAPHDB_USER,
-            password=GRAPHDB_PASSWORD,
+            base_url=db._base_url,
+            username=db._username,
+            password=db._password,
             repository="SomeWrongRepository",
         )
