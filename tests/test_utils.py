@@ -1,4 +1,4 @@
-import graph_db_interface.utils.utils as utils
+from graph_db_interface.utils import utils
 
 
 def test_extract_where_clause():
@@ -40,13 +40,13 @@ def test_strip_angle_brackets():
 
 def test_to_xsd_literal():
     literal = utils.to_xsd_literal(42)
-    assert type(literal.value) is int
+    assert isinstance(literal.value, int)
 
     literal = utils.to_xsd_literal(True)
-    assert type(literal.value) is bool
+    assert isinstance(literal.value, bool)
 
     literal = utils.to_xsd_literal(42.5)
-    assert type(literal.value) is float
+    assert isinstance(literal.value, float)
 
 
 def test_from_xsd_literal():

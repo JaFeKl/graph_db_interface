@@ -1,10 +1,10 @@
 import logging
+from typing import List, Union, Any, Optional
 import requests
 from requests import Response
 from rdflib import Literal
 from SPARQLWrapper import SPARQLWrapper, JSON, POST, QueryResult
-from typing import List, Union, Any
-import graph_db_interface.utils.utils as utils
+from graph_db_interface.utils import utils
 
 
 LOGGER = logging.getLogger(__name__)
@@ -19,10 +19,12 @@ class GraphDB:
         username: str,
         password: str,
         repository: str,
+        timeout: int = 60,
     ):
         self._base_url = base_url
         self._username = username
         self._password = password
+        self._timeout = timeout
         self._token = self._get_authentication_token(self._username, self._password)
         self._header = {"Authorization": self._token, "Accept": "application/json"}
         self._repositories = self.get_list_of_repositories(only_ids=True)
@@ -45,7 +47,7 @@ class GraphDB:
         if repository not in self._repositories:
             raise ValueError(
                 "Invalid repository name. Allowed values are:"
-                f" {', '.join([repository for repository in self._repositories])}."
+                f" {', '.join(list(self._repositories))}."
             )
         return repository
 
@@ -86,18 +88,21 @@ class GraphDB:
             "password": password,
         }
         response = requests.post(
-            self._base_url + "/rest/login", headers=headers, json=payload
+            f"{self._base_url}/rest/login",
+            headers=headers,
+            json=payload,
+            timeout=self._timeout,
         )
         if response.status_code == 200:
             return response.headers.get("Authorization")
-        else:
-            LOGGER.error(
-                f"Failed to obtain gdb token: {response.status_code}: {response.text}"
-            )
-            raise ValueError(
-                "You were unable to obtain a token given your provided credentials."
-                " Please make sure, that your provided credentials are valid."
-            )
+
+        LOGGER.error(
+            f"Failed to obtain gdb token: {response.status_code}: {response.text}"
+        )
+        raise ValueError(
+            "You were unable to obtain a token given your provided credentials."
+            " Please make sure, that your provided credentials are valid."
+        )
 
     def _add_prefix(self, prefix: str, iri: str):
         self._prefixes[prefix] = iri
@@ -113,8 +118,8 @@ class GraphDB:
     def _named_graph_string(self, named_graph: str = None) -> str:
         if named_graph:
             return f"GRAPH {named_graph}"
-        else:
-            return ""
+
+        return ""
 
     """ GraphDB Management """
 
@@ -146,18 +151,18 @@ class GraphDB:
             Optional[List[str]]: Returns a list of repository ids.
         """
         url = f"{self._base_url}/rest/repositories"
-        response = requests.get(url, headers=self._header)
+        response = requests.get(url, headers=self._header, timeout=self._timeout)
 
         if response.status_code == 200:
             repositories = response.json()
             if only_ids:
                 return [repo["id"] for repo in repositories]
             return repositories
-        else:
-            LOGGER.warning(
-                f"Failed to list repositories: {response.status_code}: {response.text}"
-            )
-            return None
+
+        LOGGER.warning(
+            f"Failed to list repositories: {response.status_code}: {response.text}"
+        )
+        return None
 
     """ Utility """
 
@@ -301,9 +306,9 @@ class GraphDB:
         if result["boolean"] is True:
             LOGGER.debug(f"Found IRI {iri}")
             return True
-        else:
-            LOGGER.debug(f"Unable to find IRI {iri}")
-            return False
+
+        LOGGER.debug(f"Unable to find IRI {iri}")
+        return False
 
     def triple_exists(
         self,
@@ -335,12 +340,12 @@ class GraphDB:
         if results["boolean"] is True:
             LOGGER.debug(f"Found triple {subject}, {predicate}, {object}")
             return True
-        else:
-            LOGGER.debug(
-                f"Unable to find triple {subject}, {predicate}, {object}, named_graph:"
-                f" {named_graph}, repository: {self._repository}"
-            )
-            return False
+
+        LOGGER.debug(
+            f"Unable to find triple {subject}, {predicate}, {object}, named_graph:"
+            f" {named_graph}, repository: {self._repository}"
+        )
+        return False
 
     def triple_get_subjects(self, predicate: str, object: str) -> List[str]:
         query = f"""
@@ -420,8 +425,8 @@ class GraphDB:
                 f" {named_graph}, repository: {self._repository}"
             )
             return True
-        else:
-            return False
+
+        return False
 
     def triple_delete(
         self,
@@ -465,9 +470,9 @@ class GraphDB:
         if result.response.status == 204:
             LOGGER.debug(f"Successfully deleted triple: {subject} {predicate} {object}")
             return True
-        else:
-            LOGGER.warning(f"Failed to delete triple: {subject} {predicate} {object}")
-            return False
+
+        LOGGER.warning(f"Failed to delete triple: {subject} {predicate} {object}")
+        return False
 
     def triple_update(
         self,
@@ -568,22 +573,18 @@ class GraphDB:
                 f" {self._repository}"
             )
             return True
-        else:
-            LOGGER.warning(
-                f"Failed to update triple to: {update_subject} {update_predicate}"
-                f" {update_object}, named_graph: {named_graph}, repository:"
-                f" {self._repository}, status code: {result.response.status}"
-            )
-            return False
+
+        LOGGER.warning(
+            f"Failed to update triple to: {update_subject} {update_predicate}"
+            f" {update_object}, named_graph: {named_graph}, repository:"
+            f" {self._repository}, status code: {result.response.status}"
+        )
+        return False
 
     """RDF4J REST API - Graph Store : Named graph management"""
 
     def named_graph_add(
-        self,
-        content: str,
-        graph_uri: str,
-        content_type: str = "application/x-turtle",
-        clear_existing: bool = True,
+        self, content: str, graph_uri: str, content_type: str = "application/x-turtle"
     ):
         """
         Add statements to a directly referenced named graph. Overrides all existing statements in this graph.
@@ -599,6 +600,7 @@ class GraphDB:
             headers=headers,
             auth=(self._username, self._password),
             data=content,
+            timeout=self._timeout,
         )
         if response.status_code == 204:
             LOGGER.debug(f"Named graph {graph_uri} created successfully!")
@@ -619,7 +621,7 @@ class GraphDB:
             f"?graph={graph_uri}"
         )
         response: Response = requests.delete(
-            endpoint, auth=(self._username, self._password)
+            endpoint, auth=(self._username, self._password), timeout=self._timeout
         )
 
         if response.status_code == 204:
@@ -639,15 +641,19 @@ class GraphDB:
         if not self.triple_exists(iri, "rdf:type", "owl:NamedIndividual"):
             LOGGER.warning(f"IRI {iri} is not a named individual!")
             return False
-        else:
-            return True
+
+        return True
 
     def owl_get_classes_of_individual(
         self,
         instance_iri: str,
-        ignored_prefixes: List[str] = ["owl", "rdfs"],
+        ignored_prefixes: Optional[List[str]] = None,
         local_name: bool = True,
     ) -> List[str]:
+        ignored_prefixes = (
+            ignored_prefixes if ignored_prefixes is not None else ["owl", "rdfs"]
+        )
+
         if len(ignored_prefixes) > 0:
             filter_conditions = (
                 "FILTER ("
