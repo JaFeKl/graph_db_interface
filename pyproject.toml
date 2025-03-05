@@ -1,3 +1,7 @@
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
 [tool.poetry]
 name = "graph-db-interface"
 version = "0.2.0"
@@ -12,7 +16,27 @@ SPARQLWrapper = "^2.0.0"
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"
 pytest = "^8.2.0"
+pylint = "^3.3.4"
 
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+[tool.pylint."MESSAGES CONTROL"]
+disable = [
+  "broad-exception-caught",
+  "missing-function-docstring",
+  "missing-module-docstring",
+  "line-too-long",
+  "logging-fstring-interpolation",
+  "pointless-string-statement",
+  "protected-access",
+  "redefined-builtin",
+  "too-many-ancestors",
+  "too-many-arguments",
+  "too-many-branches",
+  "too-many-instance-attributes",
+  "too-many-lines",
+  "too-many-locals",
+  "too-many-nested-blocks",
+  "too-many-positional-arguments",
+  "too-many-public-methods",
+  "too-many-return-statements",
+  "too-many-statements",
+]
