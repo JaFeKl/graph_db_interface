@@ -1,9 +1,9 @@
 import logging
-from typing import List, Union, Any, Optional
+from base64 import b64encode
+from typing import List, Union, Any, Optional, Dict
 import requests
 from requests import Response
 from rdflib import Literal
-from SPARQLWrapper import SPARQLWrapper, JSON, POST, QueryResult
 from graph_db_interface.utils import utils
 
 
@@ -20,16 +20,22 @@ class GraphDB:
         password: str,
         repository: str,
         timeout: int = 60,
+        use_gdb_token: bool = True,
     ):
         self._base_url = base_url
         self._username = username
         self._password = password
         self._timeout = timeout
-        self._token = self._get_authentication_token(self._username, self._password)
-        self._header = {"Authorization": self._token, "Accept": "application/json"}
+        self._auth = None
+
+        if use_gdb_token:
+            self._auth = self._get_authentication_token(self._username, self._password)
+        else:
+            token = bytes(f"{self._username}:{self._password}", "utf-8")
+            self._auth = f"Basic {b64encode(token).decode()}"
+
         self._repositories = self.get_list_of_repositories(only_ids=True)
-        self._repository = self._validate_repository(repository)
-        self._initialize_sparql_wrapper()
+        self.repository = repository
 
         self._prefixes = {}
         self._add_prefix("owl", "<http://www.w3.org/2002/07/owl#>")
@@ -38,8 +44,7 @@ class GraphDB:
         self._add_prefix("onto", "<http://www.ontotext.com/>")
 
         LOGGER.info(
-            f"Connected to GraphDB. User: {self._username}, Repository:"
-            f" {self.repository}"
+            f"Using GraphDB repository '{self.repository}' as user '{self._username}'."
         )
 
     def _validate_repository(self, repository: str) -> str:
@@ -57,17 +62,21 @@ class GraphDB:
 
     @repository.setter
     def repository(self, value: str):
-        self._validate_repository(value)
+        self._repository = self._validate_repository(value)
 
-    def _initialize_sparql_wrapper(self, endpoint: str = None):
-        if endpoint:
-            self.sparql = SPARQLWrapper(endpoint=endpoint)
-        else:
-            self.sparql = SPARQLWrapper(
-                endpoint=f"{self._base_url}/repositories/{self.repository}/statements"
-            )
-        self.sparql.setCredentials(self._username, self._password)
-        self.sparql.setReturnFormat(JSON)
+    def _make_request(
+        self, method: str, endpoint: str, timeout: int = None, **kwargs
+    ) -> Response:
+        timeout = timeout if timeout is not None else self._timeout
+
+        headers = kwargs.pop("headers", {})
+
+        if self._auth is not None:
+            headers["Authorization"] = self._auth
+
+        return getattr(requests, method)(
+            f"{self._base_url}/{endpoint}", headers=headers, timeout=timeout, **kwargs
+        )
 
     def _get_authentication_token(self, username: str, password: str) -> str:
         """Obtain a GDB authentication token given your username and your password
@@ -82,17 +91,11 @@ class GraphDB:
         Returns:
             str: gdb token
         """
-        headers = {"Content-Type": "application/json"}
         payload = {
             "username": username,
             "password": password,
         }
-        response = requests.post(
-            f"{self._base_url}/rest/login",
-            headers=headers,
-            json=payload,
-            timeout=self._timeout,
-        )
+        response = self._make_request("post", "rest/login", json=payload)
         if response.status_code == 200:
             return response.headers.get("Authorization")
 
@@ -123,13 +126,12 @@ class GraphDB:
 
     """ GraphDB Management """
 
-    def get_list_of_named_graphs(self) -> List:
+    def get_list_of_named_graphs(self) -> Optional[List]:
         """Get a list of named graphs in the currently set repository.
 
         Returns:
-            List: List of named graph IRIs. Can be an empty list.
+            Optional[List]: List of named graph IRIs. Can be an empty list.
         """
-        self.sparql.endpoint = f"{self._base_url}/repositories/{self._repository}"
 
         # SPARQL query to retrieve all named graphs
         query = """
@@ -137,9 +139,12 @@ class GraphDB:
         GRAPH ?graph { ?s ?p ?o }
         }
         """
-        self.sparql.setQuery(query)
-        self.sparql.setReturnFormat(JSON)
-        results = self.sparql.query().convert()
+
+        results = self.query(query)
+
+        if results is None:
+            return []
+
         return [result["graph"]["value"] for result in results["results"]["bindings"]]
 
     def get_list_of_repositories(
@@ -150,8 +155,7 @@ class GraphDB:
         Returns:
             Optional[List[str]]: Returns a list of repository ids.
         """
-        url = f"{self._base_url}/rest/repositories"
-        response = requests.get(url, headers=self._header, timeout=self._timeout)
+        response = self._make_request("get", "rest/repositories")
 
         if response.status_code == 200:
             repositories = response.json()
@@ -184,7 +188,7 @@ class GraphDB:
         update: bool = False,
         include_explicit: bool = True,
         include_implicit: bool = True,
-    ) -> QueryResult:
+    ) -> Optional[Union[Dict, bool]]:
         """
         Executes a SPARQL query with optional handling of explicit and implicit statements.
 
@@ -209,22 +213,15 @@ class GraphDB:
                 If False, implicit statements are excluded. Defaults to True.
 
         Returns:
-            QueryResult:
-                The result of the executed SPARQL query. Defined in the SPARQLWrapper package.
-                This object encapsulates the query result and may include data such as bindings,
-                errors, or status information.
+            Optional[Union[Dict, bool]]:
+                The result of the executed SPARQL query as a parsed JSON object for
+                regular queries or a boolean for update queries.
 
         Notes:
             - The query is first prefixed with all prefixes defined using `_add_prefix`.
             - The `method` determines the RDF4J endpoint used for the query.
             - If an unsupported `method` is provided, an error is logged, and the query is ignored.
         """
-        if update is False:
-            self.sparql.endpoint = f"{self._base_url}/repositories/{self._repository}"
-        else:
-            self.sparql.endpoint = (
-                f"{self._base_url}/repositories/{self.repository}/statements"
-            )
 
         # add prefixes in front of Query
         query = f"""
@@ -235,9 +232,27 @@ class GraphDB:
             query = self._set_explicit(query)
         elif include_implicit and not include_explicit:
             query = self._set_implicit(query)
-        self.sparql.setMethod(POST)
-        self.sparql.setQuery(query)
-        return self.sparql.query()
+
+        endpoint = f"repositories/{self._repository}"
+        headers = {
+            "Content-Type": "application/sparql-query",
+            "Accept": "application/sparql-results+json",
+        }
+
+        if update:
+            endpoint += "/statements"
+            headers["Content-Type"] = "application/sparql-update"
+
+        response = self._make_request("post", endpoint, headers=headers, data=query)
+
+        if not response.ok:
+            status_code = response.status_code
+            LOGGER.error(
+                f"Error while querying GraphDB ({status_code}) - {response.text}"
+            )
+            return False if update else None
+
+        return True if update else response.json()
 
     """ GET """
 
@@ -298,12 +313,10 @@ class GraphDB:
         )
         result = self.query(
             query=query,
-            update=False,
             include_explicit=include_explicit,
             include_implicit=include_implicit,
         )
-        result = result.convert()
-        if result["boolean"] is True:
+        if result is not None and result["boolean"]:
             LOGGER.debug(f"Found IRI {iri}")
             return True
 
@@ -328,6 +341,7 @@ class GraphDB:
         Returns:
             bool: Returns True when the given triple exists. False otherwise.
         """
+        object = utils.escape_string_literal(object)
         query = f"""
             ASK WHERE {{
                 {self._named_graph_string(named_graph)} {{
@@ -335,9 +349,8 @@ class GraphDB:
                 }}
             }}
         """
-        results = self.query(query=query, update=False)
-        results = self.sparql.query().convert()
-        if results["boolean"] is True:
+        result = self.query(query=query)
+        if result is not None and result["boolean"]:
             LOGGER.debug(f"Found triple {subject}, {predicate}, {object}")
             return True
 
@@ -347,24 +360,38 @@ class GraphDB:
         )
         return False
 
-    def triple_get_subjects(self, predicate: str, object: str) -> List[str]:
+    def triple_get_subjects(
+        self, predicate: str, object: Union[str, Literal]
+    ) -> List[str]:
+        object = utils.escape_string_literal(object)
         query = f"""
         SELECT ?subject
         WHERE {{
             ?subject {predicate} {object} .
         }}
         """
-        results = self.query(query=query, update=False).convert()
+        results = self.query(query=query)
+
+        if results is None:
+            return []
+
         return [result["subject"]["value"] for result in results["results"]["bindings"]]
 
-    def triple_get_predicates(self, subject: str, object: str) -> List[str]:
+    def triple_get_predicates(
+        self, subject: str, object: Union[str, Literal]
+    ) -> List[str]:
+        object = utils.escape_string_literal(object)
         query = f"""
         SELECT ?predicate
         WHERE {{
             {subject} ?predicate {object} .
         }}
         """
-        results = self.query(query=query, update=False).convert()
+        results = self.query(query=query)
+
+        if results is None:
+            return []
+
         return [
             result["predicate"]["value"] for result in results["results"]["bindings"]
         ]
@@ -376,7 +403,10 @@ class GraphDB:
             {subject} {predicate} ?object .
         }}
         """
-        results = self.query(query=query, update=False).convert()
+        results = self.query(query=query)
+
+        if results is None:
+            return []
 
         converted_results = []  # given the values are literals, we try to convert them
 
@@ -411,6 +441,7 @@ class GraphDB:
         Returns:
             bool: Returns True if the triple was successfully added. Returns False otherwise.
         """
+        object = utils.escape_string_literal(object)
         query = f"""
             INSERT DATA {{
                 {self._named_graph_string(named_graph)} {{
@@ -419,14 +450,13 @@ class GraphDB:
             }}
         """
         result = self.query(query=query, update=True)
-        if result.response.status == 204:
+        if result:
             LOGGER.debug(
                 f"New triple inserted: {subject}, {predicate}, {object} named_graph:"
                 f" {named_graph}, repository: {self._repository}"
             )
-            return True
 
-        return False
+        return result
 
     def triple_delete(
         self,
@@ -448,6 +478,8 @@ class GraphDB:
         Returns:
             bool: Returns True if query was successfull. False otherwise.
         """
+        object = utils.escape_string_literal(object)
+
         if check_exist:
             if not self.triple_exists(subject, predicate, object, named_graph):
                 LOGGER.warning("Unable to delete triple since it does not exist")
@@ -467,12 +499,12 @@ class GraphDB:
                     }}
             """
         result = self.query(query=query, update=True)
-        if result.response.status == 204:
+        if result:
             LOGGER.debug(f"Successfully deleted triple: {subject} {predicate} {object}")
-            return True
+        else:
+            LOGGER.warning(f"Failed to delete triple: {subject} {predicate} {object}")
 
-        LOGGER.warning(f"Failed to delete triple: {subject} {predicate} {object}")
-        return False
+        return result
 
     def triple_update(
         self,
@@ -518,6 +550,8 @@ class GraphDB:
             )
             ```
         """
+        old_object = utils.escape_string_literal(old_object)
+        new_object = utils.escape_string_literal(new_object)
 
         if not (old_subject and old_predicate and old_object):
             LOGGER.warning(
@@ -566,20 +600,20 @@ class GraphDB:
         LOGGER.debug(query)
         result = self.query(query=query, update=True)
 
-        if result.response.status == 204:
+        if result:
             LOGGER.debug(
                 f"Successfully updated triple to: {update_subject} {update_predicate}"
                 f" {update_object}, named_graph: {named_graph}, repository:"
                 f" {self._repository}"
             )
-            return True
+        else:
+            LOGGER.warning(
+                f"Failed to update triple to: {update_subject} {update_predicate}"
+                f" {update_object}, named_graph: {named_graph}, repository:"
+                f" {self._repository}"
+            )
 
-        LOGGER.warning(
-            f"Failed to update triple to: {update_subject} {update_predicate}"
-            f" {update_object}, named_graph: {named_graph}, repository:"
-            f" {self._repository}, status code: {result.response.status}"
-        )
-        return False
+        return result
 
     """RDF4J REST API - Graph Store : Named graph management"""
 
@@ -589,18 +623,12 @@ class GraphDB:
         """
         Add statements to a directly referenced named graph. Overrides all existing statements in this graph.
         """
-
-        headers = {"Content-Type": content_type}
-        endpoint = (
-            f"{self._base_url}/repositories/{self._repository}/rdf-graphs/service?"
-            f"graph={graph_uri}"
-        )
-        response: Response = requests.put(
-            endpoint,
-            headers=headers,
-            auth=(self._username, self._password),
+        response: Response = self._make_request(
+            "put",
+            f"repositories/{self._repository}/rdf-graphs/service",
+            params={"graph": graph_uri},
+            headers={"Content-Type": content_type},
             data=content,
-            timeout=self._timeout,
         )
         if response.status_code == 204:
             LOGGER.debug(f"Named graph {graph_uri} created successfully!")
@@ -615,13 +643,10 @@ class GraphDB:
         """
         Deletes the specified named graph from the triplestore.
         """
-
-        endpoint = (
-            f"{self._base_url}/repositories/{self._repository}/rdf-graphs/service"
-            f"?graph={graph_uri}"
-        )
-        response: Response = requests.delete(
-            endpoint, auth=(self._username, self._password), timeout=self._timeout
+        response: Response = self._make_request(
+            "delete",
+            f"repositories/{self._repository}/rdf-graphs/service",
+            params={"graph": graph_uri},
         )
 
         if response.status_code == 204:
@@ -676,7 +701,11 @@ class GraphDB:
                 {filter_conditions}
         }}
         """
-        results = self.query(query=query, update=False).convert()
+        results = self.query(query=query)
+
+        if results is None:
+            return []
+
         classes = [
             result["class"]["value"] for result in results["results"]["bindings"]
         ]

@@ -1,6 +1,7 @@
 import logging
 import re
-from rdflib import URIRef, Literal
+from typing import Union
+from rdflib import URIRef, Literal, XSD
 
 
 LOGGER = logging.getLogger(__name__)
@@ -82,3 +83,16 @@ def insert_before_where_clause(query: str, from_statement: str) -> str:
         " Returning the original query..."
     )
     return query
+
+
+def escape_string_literal(value: Union[str, Literal]) -> str:
+    if (
+        isinstance(value, Literal)
+        and isinstance(value.value, str)
+        # Try to prevent double escaping.
+        and not '\\"' in value
+    ):
+        value = value.replace('"', '\\"')
+        return Literal(f'"{value}"', datatype=XSD.string)
+
+    return value
