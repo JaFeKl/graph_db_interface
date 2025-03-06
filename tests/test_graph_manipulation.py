@@ -9,7 +9,7 @@ OBJECT = Literal(0.5, datatype=XSD.double)  # data value
 
 NEW_SUBJECT = "<http://example.org/new_subject>"
 NEW_PREDICATE = "<http://example.org/new_predicate>"
-NEW_OBJECT = Literal(0.7, datatype=XSD.double)
+NEW_OBJECT = Literal('string with "quotes"', datatype=XSD.string)
 
 NAMED_GRAPH = "<https://my_named_test_graph>"
 
