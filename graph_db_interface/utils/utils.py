@@ -1,46 +1,38 @@
 import logging
-import re
 from typing import Union, Dict, Optional, Any
 from rdflib import URIRef, Literal, XSD, Dataset
 from rdflib.plugins.sparql.processor import prepareQuery
 from urllib.parse import urlparse
-from pyparsing import ParseBaseException
-from graph_db_interface.exceptions import InvalidIRIError
+from graph_db_interface.exceptions import (
+    InvalidInputError,
+    InvalidIRIError,
+    InvalidQueryError,
+)
 
 
 LOGGER = logging.getLogger(__name__)
 
 
-def validate_query(query: str) -> bool:
-    """Validate a SPARQL query.
-
-    Args:
-        query (str): The SPARQL query to validate.
-
-    Returns:
-        bool: True if the query is valid, False otherwise.
-    """
+def validate_query(query: str):
     try:
         # Attempt to prepare the query
         prepareQuery(query)
         return True
     except Exception as e:
-        LOGGER.error(f"Invalid SPARQL query: {e}")
-        return False
+        error_message = f"SPAQRQL query validation failed (update query): {e}"
+        LOGGER.error(error_message)
+        raise InvalidQueryError(error_message)
 
 
-def validate_update_query(query: str) -> bool:
+def validate_update_query(query: str):
     try:
         g = Dataset()
         g.update(query)
         return True
-    except ParseBaseException as e:
-        LOGGER.error(f"Parse error: {e}")
-        return False
     except Exception as e:
-        # Could be other issues (like malformed URIs)
-        LOGGER.error(f"General error: {e}")
-        return False
+        error_message = f"SPAQRQL query validation failed (update query): {e}"
+        LOGGER.error(error_message)
+        raise InvalidQueryError(error_message)
 
 
 def ensure_absolute(iri: str):
@@ -94,7 +86,7 @@ def to_literal(value, datatype=None, as_string: bool = False) -> Union[Literal, 
     if isinstance(value, str) and datatype is None:
         datatype = XSD.string
     literal = Literal(value, datatype=datatype)
-    literal = escape_string_literal(literal)
+    # literal = escape_string_literal(literal)
     if as_string:
         return literal.n3()
     return literal
@@ -186,12 +178,91 @@ def is_shorthand_iri(value: str, prefixes: Optional[Dict[str, str]] = None) -> b
         return False
 
 
+def prepare_subject(sub: str, ensure_iri: bool = True) -> str:
+    """
+    Prepares and validates a subject string, ensuring it conforms to IRI (Internationalized Resource Identifier)
+    standards if required.
+
+    Args:
+        sub (str): The subject string to validate and prepare.
+        ensure_iri (bool, optional): If True, ensures the subject is a valid IRI. Defaults to True.
+
+    Returns:
+        str: The prepared subject string, either as an absolute IRI or as provided if valid.
+
+    Raises:
+        InvalidInputError: If the provided subject is not a string.
+        InvalidIRIError: If the subject is not a valid IRI and `ensure_iri` is True.
+    """
+    if not type(sub) == str:
+        raise InvalidInputError(f"Provided subject '{sub}' is not a string.")
+    if is_iri(sub):
+        return ensure_absolute(sub)
+    elif is_shorthand_iri(sub):
+        return sub
+    else:
+        if ensure_iri is True:
+            raise InvalidIRIError(
+                f"Provided subject '{sub}' is not a valid IRI. Ensure 'ensure_iri' is set correctly."
+            )
+        else:
+            return sub
+
+
+def prepare_predicate(pred: str, ensure_iri: bool = True) -> str:
+    """
+    Prepares a predicate string by validating and optionally ensuring it is an IRI (Internationalized Resource Identifier).
+
+    Args:
+        pred (str): The predicate to be validated and processed.
+        ensure_iri (bool, optional): If True, ensures the predicate is a valid IRI. Defaults to True.
+
+    Returns:
+        str: The processed predicate, either as an absolute IRI or as provided if valid.
+
+    Raises:
+        InvalidInputError: If the provided predicate is not a string.
+        InvalidIRIError: If `ensure_iri` is True and the provided predicate is not a valid IRI.
+    """
+    if not type(pred) == str:
+        raise InvalidInputError(f"Provided subject '{pred}' is not a string.")
+    if is_iri(pred):
+        return ensure_absolute(pred)
+    elif is_shorthand_iri(pred):
+        return pred
+    else:
+        if ensure_iri is True:
+            raise InvalidIRIError(
+                f"Provided predicate '{pred}' is not a valid IRI. Ensure 'ensure_iri' is set correctly."
+            )
+        else:
+            return pred
+
+
 def prepare_object(
     obj: Any, as_string: bool = False, ensure_iri: bool = False
 ) -> Union[str, Literal]:
-    """Prepare an object for SPARQL queries."""
+    """
+    Prepares an object for use in a graph database context by ensuring it is in the
+    correct format, such as an IRI (Internationalized Resource Identifier) or a Literal.
+
+    Args:
+        obj (Any): The object to be prepared. It can be a string, Literal, or any other type.
+        as_string (bool, optional): If True, converts a Literal object to its string representation.
+            Defaults to False.
+        ensure_iri (bool, optional): If True, ensures that the provided object is a valid IRI.
+            Raises an InvalidIRIError if the object is not a valid IRI. Defaults to False.
+
+    Returns:
+        Union[str, Literal]: The prepared object. This can be:
+            - A string representing an absolute or shorthand IRI.
+            - A Literal object or its string representation if `as_string` is True.
+
+    Raises:
+        InvalidIRIError: If `ensure_iri` is True and the provided object is not a valid IRI.
+    """
     if ensure_iri:
-        if not isinstance(obj, str):
+        if not type(obj) == str:
             raise InvalidIRIError(
                 f"Provided object '{obj}' is not a string. Cannot be a valid IRI."
             )
@@ -204,36 +275,20 @@ def prepare_object(
                 f"Provided object '{obj}' is not a valid IRI. Ensure 'ensure_iri' is set correctly."
             )
 
-    if isinstance(obj, str):
+    if type(obj) == str:
         if is_iri(obj):
             return ensure_absolute(obj)
-        elif is_shorthand_iri(obj):
+        else:
             return obj
 
-    if isinstance(obj, Literal):
-        obj: Literal = escape_string_literal(obj)
+    if type(obj) == Literal:
+        # TODO: How to handle string escapes, obj: Literal = escape_string_literal(obj)
         if as_string:
-            obj = obj.n3()
+            return obj.n3()
         else:
             return obj
 
     return to_literal(obj, as_string=as_string)
-
-
-def prepare_subject_or_predicate(
-    subject_or_predicate: str, ensure_iri: bool = True
-) -> str:
-    if is_iri(subject_or_predicate):
-        return ensure_absolute(subject_or_predicate)
-    elif is_shorthand_iri(subject_or_predicate):
-        return subject_or_predicate
-    else:
-        if ensure_iri is True:
-            raise InvalidIRIError(
-                f"Provided subject or predicate '{subject_or_predicate}' is not a valid IRI."
-            )
-        else:
-            return subject_or_predicate
 
 
 def encapsulate_named_graph(named_graph: Optional[str], content: str) -> str:

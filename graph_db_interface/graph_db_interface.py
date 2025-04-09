@@ -6,7 +6,11 @@ import requests
 from requests import Response
 from rdflib import Literal
 from graph_db_interface.utils import utils
-from graph_db_interface.exceptions import InvalidQueryError
+from graph_db_interface.exceptions import (
+    InvalidInputError,
+    InvalidRepositoryError,
+    AuthenticationError,
+)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -44,9 +48,12 @@ class SPARQLQuery:
         self,
         variables: List[str],
         where_clauses: List[str],
+        select_type: SPARQLQueryType = SPARQLQueryType.SELECT,
     ) -> str:
         block_parts = []
-        block_parts.append(f"SELECT {self._create_variable_string(variables)}")
+        block_parts.append(
+            f"{select_type.name} {self._create_variable_string(variables)}"
+        )
         part = self._add_explicit_implicit()
         if self._named_graph:
             block_parts.append(f"FROM {utils.ensure_absolute(self._named_graph)}")
@@ -61,9 +68,13 @@ class SPARQLQuery:
         where_clauses: List[str],
     ) -> str:
         block_parts = []
+        block_parts.append("ASK")
+        part = self._add_explicit_implicit()
+        if part:
+            block_parts.append(part)
         block_parts.append(
             f"""
-ASK WHERE {{
+WHERE {{
     {utils.encapsulate_named_graph(self._named_graph, self._combine_where_clauses(where_clauses))
 }}}
 """
@@ -155,7 +166,7 @@ ASK WHERE {{
             return "FROM onto:implicit"
         return None
 
-    def to_string(self, validate: bool = True) -> Optional[str]:
+    def to_string(self, validate: bool = True) -> str:
         query_parts = []
         if self._prefixes:
             query_parts.append(self._get_prefix_string())
@@ -171,22 +182,16 @@ ASK WHERE {{
                 SPARQLQueryType.SELECT_REDUCED,
                 SPARQLQueryType.ASK,
             ):
-                if not utils.validate_query(query):
-                    LOGGER.error(
-                        "The constructed query is invalid. Please check the query syntax."
-                    )
-                    return None
+                # Validate the select or ask query
+                utils.validate_query(query)
+
             elif self._query_blocks[0]["type"] in (
                 SPARQLQueryType.INSERT_DATA,
                 SPARQLQueryType.DELETE_DATA,
                 SPARQLQueryType.DELETE_INSERT,
             ):
                 # Validate the update query
-                if not utils.validate_update_query(query):
-                    LOGGER.error(
-                        "The constructed update query is invalid. Please check the query syntax."
-                    )
-                    return None
+                utils.validate_update_query(query)
         return query
 
 
@@ -233,7 +238,7 @@ class GraphDB:
     def _validate_repository(self, repository: str) -> str:
         """Validates if the repository is part of the RepositoryNames enum."""
         if repository not in self._repositories:
-            raise ValueError(
+            raise InvalidRepositoryError(
                 "Invalid repository name. Allowed values are:"
                 f" {', '.join(list(self._repositories))}."
             )
@@ -302,7 +307,7 @@ class GraphDB:
         LOGGER.error(
             f"Failed to obtain gdb token: {response.status_code}: {response.text}"
         )
-        raise ValueError(
+        raise AuthenticationError(
             "You were unable to obtain a token given your provided credentials."
             " Please make sure, that your provided credentials are valid."
         )
@@ -324,131 +329,24 @@ class GraphDB:
 
         return ""
 
-    def construct_query(
-        self,
-        query_type: SPARQLQueryType,
-        variables: Optional[List[str]] = None,
-        where_clauses: List[str] = [],
-        insert_or_delete_triples: List[Tuple[str]] = [],
-        include_explicit: bool = True,
-        include_implicit: bool = True,
-    ) -> Optional[str]:
-        """Construct a SPARQL query string based on the provided query type."""
-        query_lines = []
-
-        # Add prefixes if provided
-        if self._prefixes:
-            query_lines.append(self._get_prefix_string())
-
-        # Query head
-        if query_type in (
-            SPARQLQueryType.SELECT,
-            SPARQLQueryType.SELECT_DISTINCT,
-            SPARQLQueryType.SELECT_REDUCED,
-        ):
-            var_str = " ".join(variables) if variables else "*"
-            query_lines.append(f"{query_type.value} {var_str}")
-            if self._named_graph:
-                query_lines.append(f"FROM {utils.ensure_absolute(self._named_graph)}")
-
-            if include_explicit and not include_implicit:
-                query_lines.append("FROM onto:explicit")
-            elif include_implicit and not include_explicit:
-                query_lines.append("FROM onto:implicit")
-
-            if len(where_clauses) > 1:
-                where_clauses_combined = "\n".join(where_clauses)
-                where_clause_string = f"""
-WHERE {{
-    {where_clauses_combined}
-}}
-"""
-            else:
-                where_clause_string = "WHERE { }"
-
-            query_lines.append(where_clause_string)
-
-        elif query_type == SPARQLQueryType.ASK:
-            where_clauses_combined = " .\n".join(where_clauses)
-            combined = f"""
-{query_type.value} WHERE {{
-    {utils.encapsulate_named_graph(self._named_graph, where_clauses_combined)}
-    }}
-"""
-            query_lines.append(combined)
-
-        elif query_type in (SPARQLQueryType.INSERT_DATA, SPARQLQueryType.DELETE_DATA):
-            data_combined = "\n".join(
-                f"{triple[0]} {triple[1]} {triple[2]} ."
-                for triple in insert_or_delete_triples
-            )
-            full_clause = f"""
-{query_type.value} {{
-    {utils.encapsulate_named_graph(self._named_graph, data_combined)}
-}}
-"""
-            query_lines.append(full_clause)
-
-        query = "\n".join(query_lines)
-
-        if query_type in (
-            SPARQLQueryType.SELECT,
-            SPARQLQueryType.SELECT_DISTINCT,
-            SPARQLQueryType.SELECT_REDUCED,
-            SPARQLQueryType.ASK,
-        ):
-            if not utils.validate_query(query):
-                LOGGER.error(
-                    "The constructed query is invalid. Please check the query syntax."
-                )
-                return None
-        elif query_type in (SPARQLQueryType.INSERT_DATA, SPARQLQueryType.DELETE_DATA):
-            if not utils.validate_update_query(query):
-                LOGGER.error(
-                    "The constructed update query is invalid. Please check the query syntax."
-                )
-                return None
-        return query
-
     def query(
         self,
         query: str,
         update: bool = False,
     ) -> Optional[Union[Dict, bool]]:
         """
-        Executes a SPARQL query with optional handling of explicit and implicit statements.
-
-        This method sends a SPARQL query to the specified endpoint using either the GET or POST method.
-        It also allows the inclusion of explicit and/or implicit statements based on the provided flags.
-
+        Executes a SPARQL query or update operation on the GraphDB repository.
         Args:
-            query (str):
-                The SPARQL query string to be executed.
-
-            update (bool, optional):
-                If True, the /repositories/{repositoryID}/statements endpoint is being used with 'POST'
-                If False, the /repositories/{repositoryID} endpoint is used with 'POST'
-                Defaults to 'False'.
-
-            include_explicit (bool, optional):
-                If True, explicit statements are included in the query.
-                If False, explicit statements are excluded. Defaults to True.
-
-            include_implicit (bool, optional):
-                If True, implicit statements are included in the query. Defaults to True.
-                If False, implicit statements are excluded. Defaults to True.
-
+            query (str): The SPARQL query or update string to be executed.
+            update (bool, optional): Indicates whether the query is an update operation.
+                Defaults to False.
         Returns:
             Optional[Union[Dict, bool]]:
-                The result of the executed SPARQL query as a parsed JSON object for
-                regular queries or a boolean for update queries.
-
-        Notes:
-            - The query is first prefixed with all prefixes defined using `_add_prefix`.
-            - The `method` determines the RDF4J endpoint used for the query.
-            - If an unsupported `method` is provided, an error is logged, and the query is ignored.
+                - If `update` is False, returns the query result as a dictionary (parsed JSON).
+                - If `update` is True, returns True if the update was successful.
+                - Returns None if the query fails and `update` is False.
+                - Returns False if the update fails and `update` is True.
         """
-
         endpoint = f"repositories/{self._repository}"
         headers = {
             "Content-Type": "application/sparql-query",
@@ -479,12 +377,12 @@ WHERE {{
         """
         # TODO: This query is quite slow and should be optimized
         # SPARQL query to retrieve all named graphs
+
         query = """
         SELECT DISTINCT ?graph WHERE {
         GRAPH ?graph { ?s ?p ?o }
         }
         """
-
         results = self.query(query)
 
         if results is None:
@@ -520,62 +418,64 @@ WHERE {{
     def iri_exists(
         self,
         iri: str,
-        as_subject: bool = False,
-        as_predicate: bool = False,
-        as_object: bool = False,
-        filters: dict = None,
+        as_sub: bool = False,
+        as_pred: bool = False,
+        as_obj: bool = False,
         include_explicit: bool = True,
         include_implicit: bool = True,
-        named_graph: str = None,
     ) -> bool:
-        """Check if a given IRI exists.
+        """
+        Checks if a given IRI exists in the graph database as a subject, predicate, or object.
 
         Args:
-            iri (str): An IRI, e.g. absolute <http://example.org/subject> or prefixed, e.g. ex:subject
-            as_subject (bool, optional): If the IRI should be searched for as a subject. Defaults to False.
-            as_predicate (bool, optional): If the IRI should be searched for as a predicate. Defaults to False.
-            as_object (bool, optional): If the IRI should be searched for as a object. Defaults to False.
-            filters (dict, optional): A dictionary that maps list of IRIS to either 's', 'p', 'o' and defines if triples that match
-                these cases should be ignored. Defaults to None. E.g. filters = {'p' = [<http://example.org/predicate>]}
-
-            named_graph (str, optional): A specific named graph to query in. Defaults to None.
+            iri (str): The IRI to check for existence.
+            as_sub (bool, optional): If True, checks if the IRI exists as a subject. Defaults to False.
+            as_pred (bool, optional): If True, checks if the IRI exists as a predicate. Defaults to False.
+            as_obj (bool, optional): If True, checks if the IRI exists as an object. Defaults to False.
+            include_explicit (bool, optional): If True, includes explicitly defined triples in the query. Defaults to True.
+            include_implicit (bool, optional): If True, includes implicitly inferred triples in the query. Defaults to True.
 
         Returns:
-            bool: returns True if iri in the given triple positions exists, false otherwise.
+            bool: True if the IRI exists in the graph database based on the specified criteria, False otherwise.
+
+        Raises:
+            InvalidInputError: If none of `as_sub`, `as_pred`, or `as_obj` is set to True.
         """
 
-        # Define potential query parts
-        clauses = []
-        if as_subject:
-            clauses.append(f"{{{iri} ?p ?o . }}")
-        if as_predicate:
-            clauses.append(f"{{?s {iri} ?o . }}")
-        if as_object:
-            clauses.append(f"{{?s ?p {iri} . }}")
-
-        if not clauses:
-            LOGGER.warning(
-                "No clauses defined in which to search the IRI for, returning False"
+        # Check if either as_subject, as_predicate, or as_object is True
+        if not (as_sub or as_pred or as_obj):
+            raise InvalidInputError(
+                "At least one of as_sub, as_pred, or as_obj must be True"
             )
-            return False
 
-        # Generate FILTER conditions dynamically
-        filter_conditions = []
-        if filters:
-            for var, values in filters.items():
-                if values:
-                    conditions = " && ".join([f"?{var} != {value}" for value in values])
-                    filter_conditions.append(f"FILTER ({conditions})")
+        # Define potential query parts
+        where_clauses = []
+        if as_sub:
+            sub = utils.prepare_subject(iri, ensure_iri=True)
+            where_clauses.append(f"{{{sub} ?p ?o . }}")
+        if as_pred:
+            pred = utils.prepare_predicate(iri, ensure_iri=True)
+            where_clauses.append(f"{{?s {pred} ?o . }}")
+        if as_obj:
+            obj = utils.prepare_object(iri, as_string=True)
+            where_clauses.append(f"{{?s ?p {obj} . }}")
 
-        filter_clause = " ".join(filter_conditions)
-        query = (
-            f"ASK WHERE {{ {self._named_graph_string(named_graph)} {{"
-            f" {' UNION '.join(clauses)} {filter_clause} }} }}"
-        )
-        result = self.query(
-            query=query,
+        query = SPARQLQuery(
+            named_graph=self._named_graph,
+            prefixes=self._prefixes,
             include_explicit=include_explicit,
             include_implicit=include_implicit,
+        )
+
+        query.add_ask_block(
+            where_clauses=where_clauses,
+        )
+
+        query_string = query.to_string(validate=True)
+
+        result = self.query(
+            query=query_string,
+            update=False,
         )
         if result is not None and result["boolean"]:
             LOGGER.debug(f"Found IRI {iri}")
@@ -586,71 +486,75 @@ WHERE {{
 
     def triple_exists(
         self,
-        subject: str,
-        predicate: str,
-        object: Union[str, Literal],
+        sub: str,
+        pred: str,
+        obj: Union[str, Literal],
     ) -> bool:
-        """Checks if a specified triple exists in the repository
+        """
+        Checks if a specific triple exists in the graph database.
 
         Args:
-            subject (str): valid subject IRI
-            predicate (str): valid predicate IRI
-            object (str): valid object IRI
-            named_graph (str, optional): A specific named graph to query in. Defaults to None.
+            sub (str): The subject of the triple. It will be processed to ensure it is an IRI.
+            pred (str): The predicate of the triple. It will be processed to ensure it is an IRI.
+            obj (Union[str, Literal]): The object of the triple. It can be a string or a Literal and
+                will be processed to ensure it is represented as a string.
 
         Returns:
-            bool: Returns True when the given triple exists. False otherwise.
+            bool: True if the triple exists in the graph database, False otherwise.
         """
-        subject = utils.prepare_subject_or_predicate(subject, ensure_iri=True)
-        predicate = utils.prepare_subject_or_predicate(predicate, ensure_iri=True)
-        object = utils.prepare_object(object, as_string=True)
+        sub = utils.prepare_subject(sub, ensure_iri=True)
+        pred = utils.prepare_predicate(pred, ensure_iri=True)
+        obj = utils.prepare_object(obj, as_string=True)
 
         query = SPARQLQuery(named_graph=self._named_graph, prefixes=self._prefixes)
         query.add_ask_block(
             where_clauses=[
-                f"{subject} {predicate} {object} .",
+                f"{sub} {pred} {obj} .",
             ],
         )
         query_string = query.to_string()
 
         result = self.query(query=query_string)
         if result is not None and result["boolean"]:
-            LOGGER.debug(f"Found triple {subject}, {predicate}, {object}")
+            LOGGER.debug(f"Found triple {sub}, {pred}, {obj}")
             return True
 
         LOGGER.debug(
-            f"Unable to find triple {subject}, {predicate}, {object}, named_graph:"
+            f"Unable to find triple {sub}, {pred}, {obj}, named_graph:"
             f" {self._named_graph}, repository: {self._repository}"
         )
         return False
 
     def triples_get(
         self,
-        subject: Optional[str] = None,
-        predicate: Optional[str] = None,
-        object: Optional[Any] = None,
+        sub: Optional[str] = None,
+        pred: Optional[str] = None,
+        obj: Optional[Any] = None,
         include_explicit: bool = True,
         include_implicit: bool = True,
     ) -> Union[List[Tuple], List[str]]:
         """
-        We can either look for
-            - Case 1: outgoing relations (subject given) or
-            - Case 2: incoming relations (object given).
+        Retrieve triples based on the specified subject, predicate, and/or object.
 
-        Additionally, it can either be an absolute or relative IRI:
-            - case 1: subject is a valid absolute or relative IRI, which means we only consider a single subject
-            - case 2: subject is not an IRI and just a single string and we want to filter for it which might return multiple subjects
+        Args:
+            sub (Optional[str]): The subject of the triple. Can be an IRI, shorthand IRI, or a string.
+            pred (Optional[str]): The predicate of the triple. Can be an IRI, shorthand IRI, or a string.
+            obj (Optional[Any]): The object of the triple. Can be an IRI, shorthand IRI, Literal, or a string.
+            include_explicit (bool): Whether to include explicitly defined triples. Defaults to True.
+            include_implicit (bool): Whether to include implicitly inferred triples. Defaults to True.
 
-        The output is a list of triple as:
-            [(subject, predicate, object), ...]
-        or if only_predicates is True:
-            [predicate, ...]
+        Returns:
+            Union[List[Tuple], List[str]]: A list of triples matching the query. Each triple is represented as a tuple
+            (subject, predicate, object), where the object is converted to its Python type if applicable.
+
+        Raises:
+            InvalidInputError: If none of the subject, predicate, or object is provided.
         """
-        if subject is None and predicate is None and object is None:
-            LOGGER.error(
-                "At least one of subject, predicate, or object must be provided, returning empty list"
+
+        if sub is None and pred is None and obj is None:
+            raise InvalidInputError(
+                "At least one of subject, predicate, or object must be provided"
             )
-            return []
 
         binds = []
         filter = []
@@ -665,25 +569,17 @@ WHERE {{
             else:
                 filter.append(f"FILTER(CONTAINS(STR({var}), '{value}'))")
 
-        if subject is not None:
-            append_bind_and_filter("?s", subject)
+        if sub is not None:
+            sub = utils.prepare_subject(sub, ensure_iri=False)
+            append_bind_and_filter("?s", sub)
 
-        if predicate is not None:
-            append_bind_and_filter("?p", predicate)
+        if pred is not None:
+            pred = utils.prepare_predicate(pred, ensure_iri=False)
+            append_bind_and_filter("?p", pred)
 
-        if object is not None:
-            object = utils.prepare_object(object)
-            append_bind_and_filter("?o", object)
-
-        # query = self.construct_query(
-        #     query_type=SPARQLQueryType.SELECT,
-        #     variables=["?s", "?p", "?o"],
-        #     where_clauses=binds + ["?s ?p ?o ."] + filter,
-        #     include_explicit=include_explicit,
-        #     include_implicit=include_implicit,
-        # )
-
-        # print(query)
+        if obj is not None:
+            obj = utils.prepare_object(obj, ensure_iri=False)
+            append_bind_and_filter("?o", obj)
 
         query = SPARQLQuery(
             named_graph=self._named_graph,  # type: ignore
@@ -695,7 +591,7 @@ WHERE {{
             variables=["?s", "?p", "?o"],
             where_clauses=binds + ["?s ?p ?o ."] + filter,
         )
-        query_string = query.to_string()
+        query_string = query.to_string(validate=True)
         if query_string is None:
             LOGGER.error(
                 "Unable to construct SPARQL query, returning empty list of triples"
@@ -717,31 +613,39 @@ WHERE {{
 
     def triple_add(
         self,
-        subject: str,
-        predicate: str,
-        object: Any,
+        sub: str,
+        pred: str,
+        obj: Any,
     ) -> bool:
-        """Add a single triple either to the default graph or to a named graph
+        """
+        Adds a triple (subject, predicate, object) to the graph database.
+
+        This method prepares the subject, predicate, and object to ensure they are
+        in the correct format (e.g., IRI or string) and constructs a SPARQL query
+        to insert the triple into the specified named graph.
 
         Args:
-            subject (str): valid subject IRI
-            predicate (str): valid predicate IRI
-            object (str): valid object IRI
-            named_graph (str, optional): The IRI of a named graph. Defaults to None.
+            sub (str): The subject of the triple. It will be processed to ensure it
+                is a valid IRI.
+            pred (str): The predicate of the triple. It will be processed to ensure
+                it is a valid IRI.
+            obj (Any): The object of the triple. It will be processed to ensure it
+                is represented as a string.
 
         Returns:
-            bool: Returns True if the triple was successfully added. Returns False otherwise.
+            bool: True if the triple was successfully inserted into the graph
+            database, False otherwise.
         """
-        subject = utils.prepare_subject_or_predicate(subject, ensure_iri=True)
-        predicate = utils.prepare_subject_or_predicate(predicate, ensure_iri=True)
-        object = utils.prepare_object(object, as_string=True)
+        sub = utils.prepare_subject(sub, ensure_iri=True)
+        pred = utils.prepare_predicate(pred, ensure_iri=True)
+        obj = utils.prepare_object(obj, as_string=True)
 
         query = SPARQLQuery(
             named_graph=self._named_graph,
             prefixes=self._prefixes,
         )
         query.add_insert_data_block(
-            tiples=[(subject, predicate, object)],
+            tiples=[(sub, pred, obj)],
         )
         query_string = query.to_string()
         if query_string is None:
@@ -750,16 +654,16 @@ WHERE {{
         result = self.query(query=query_string, update=True)
         if result:
             LOGGER.debug(
-                f"New triple inserted: {subject}, {predicate}, {object} named_graph:"
+                f"New triple inserted: {sub}, {pred}, {obj} named_graph:"
                 f" {self._named_graph}, repository: {self._repository}"
             )
         return result
 
     def triple_delete(
         self,
-        subject: str,
-        predicate: str,
-        object: Union[str, Literal],
+        sub: str,
+        pred: str,
+        obj: Union[str, Literal],
         check_exist: bool = True,
     ) -> bool:
         """Delete a single triple. A SPAQRL delete query will be successfull, even though the triple to delete does not exist in the first place.
@@ -774,12 +678,12 @@ WHERE {{
         Returns:
             bool: Returns True if query was successfull. False otherwise.
         """
-        subject = utils.prepare_subject_or_predicate(subject, ensure_iri=True)
-        predicate = utils.prepare_subject_or_predicate(predicate, ensure_iri=True)
-        object = utils.prepare_object(object, as_string=True)
+        sub = utils.prepare_subject(sub, ensure_iri=True)
+        pred = utils.prepare_predicate(pred, ensure_iri=True)
+        obj = utils.prepare_object(obj, as_string=True)
 
         if check_exist:
-            if not self.triple_exists(subject, predicate, object):
+            if not self.triple_exists(sub, pred, obj):
                 LOGGER.warning("Unable to delete triple since it does not exist")
                 return False
         query = SPARQLQuery(
@@ -787,7 +691,7 @@ WHERE {{
             prefixes=self._prefixes,
         )
         query.add_delete_data_block(
-            tiples=[(subject, predicate, object)],
+            tiples=[(sub, pred, obj)],
         )
         query_string = query.to_string()
 
@@ -797,21 +701,20 @@ WHERE {{
         # Execute the SPARQL query
         result = self.query(query=query_string, update=True)
         if result:
-            LOGGER.debug(f"Successfully deleted triple: {subject} {predicate} {object}")
+            LOGGER.debug(f"Successfully deleted triple: {sub} {pred} {obj}")
         else:
-            LOGGER.warning(f"Failed to delete triple: {subject} {predicate} {object}")
+            LOGGER.warning(f"Failed to delete triple: {sub} {pred} {obj}")
 
         return result
 
     def triple_update(
         self,
-        old_subject: str = None,
-        old_predicate: str = None,
-        old_object: Union[str, Literal] = "?o",
-        new_subject: str = None,
-        new_predicate: str = None,
-        new_object: Union[str, Literal] = None,
-        named_graph: str = None,
+        sub_old: str,
+        pred_old: str,
+        obj_old: Union[str, Literal],
+        sub_new: Optional[str] = None,
+        pred_new: Optional[str] = None,
+        obj_new: Optional[Union[str, Literal]] = None,
         check_exist: bool = True,
     ) -> bool:
         """
@@ -847,83 +750,66 @@ WHERE {{
             )
             ```
         """
-        if not (old_subject and old_predicate and old_object):
-            LOGGER.warning(
-                "All parts of the old triple (subject, predicate, object) must be"
-                " provided."
+        if not (sub_old and pred_old and obj_old):
+            raise InvalidInputError(
+                "All parts of the triple to update (sub_old, pred_old, obj_old) must be provided."
             )
-            return False
 
-        if new_subject is None and new_predicate is None and new_object is None:
-            LOGGER.warning(
-                "At least one of new_subject, new_predicate, or new_object must be"
-                " provided."
+        if sub_new is None and pred_new is None and obj_new is None:
+            raise InvalidInputError(
+                "At least one of sub_new, pred_new, or obj_new must be provided."
             )
-            return False
 
-        old_subject = utils.prepare_subject_or_predicate(old_subject, ensure_iri=True)
-        old_predicate = utils.prepare_subject_or_predicate(
-            old_predicate, ensure_iri=True
-        )
-        old_object = utils.prepare_object(old_object, as_string=True)
+        sub_old = utils.prepare_subject(sub_old, ensure_iri=True)
+        pred_old = utils.prepare_predicate(pred_old, ensure_iri=True)
+        obj_old = utils.prepare_object(obj_old, as_string=True)
 
         if check_exist:
             if not self.triple_exists(
-                old_subject,
-                old_predicate,
-                old_object,
+                sub_old,
+                pred_old,
+                obj_old,
             ):
-                LOGGER.warning(
-                    f"Triple does not exist: {old_subject} {old_predicate} {old_object}"
-                )
+                LOGGER.warning(f"Triple does not exist: {sub_old} {pred_old} {obj_old}")
                 return False
 
-        if new_subject is not None:
-            new_subject = utils.prepare_subject_or_predicate(
-                new_subject, ensure_iri=True
-            )
-        if new_predicate is not None:
-            new_predicate = utils.prepare_subject_or_predicate(
-                new_predicate, ensure_iri=True
-            )
-        if new_object is not None:
-            new_object = utils.prepare_object(new_object, as_string=True)
+        if sub_new is not None:
+            sub_new = utils.prepare_subject(sub_new, ensure_iri=True)
+        if pred_new is not None:
+            pred_new = utils.prepare_predicate(pred_new, ensure_iri=True)
+        if obj_new is not None:
+            obj_new = utils.prepare_object(obj_new, as_string=True)
 
         # Determine replacement variables
-        update_subject = new_subject if new_subject else old_subject
-        update_predicate = new_predicate if new_predicate else old_predicate
-        update_object = new_object if new_object else old_object
+        update_sub = sub_new if sub_new else sub_old
+        update_pred = pred_new if pred_new else pred_old
+        update_obj = obj_new if obj_new else obj_old
 
         query = SPARQLQuery(
             named_graph=self._named_graph,
             prefixes=self._prefixes,
         )
         query.add_delete_insert_data_block(
-            delete_tiples=[(old_subject, old_predicate, old_object)],
-            insert_tiples=[(update_subject, update_predicate, update_object)],
-            where_clauses=[f"{old_subject} {old_predicate} {old_object} ."],
+            delete_tiples=[(sub_old, pred_old, obj_old)],
+            insert_tiples=[(update_sub, update_pred, update_obj)],
+            where_clauses=[f"{sub_old} {pred_old} {obj_old} ."],
         )
-        query_string = query.to_string()
+        query_string = query.to_string(validate=True)
         if query_string is None:
             return False
 
-        print(query_string)
-        # if named_graph:
-        #     query = f"WITH {named_graph} " + query
-
-        # LOGGER.debug(query)
         result = self.query(query=query_string, update=True)
 
         if result:
             LOGGER.debug(
-                f"Successfully updated triple to: {update_subject} {update_predicate}"
-                f" {update_object}, named_graph: {named_graph}, repository:"
+                f"Successfully updated triple to: {update_sub} {update_pred}"
+                f" {update_obj}, named_graph: {self._named_graph}, repository:"
                 f" {self._repository}"
             )
         else:
             LOGGER.warning(
-                f"Failed to update triple to: {update_subject} {update_predicate}"
-                f" {update_object}, named_graph: {named_graph}, repository:"
+                f"Failed to update triple to: {update_sub} {update_pred}"
+                f" {update_obj}, named_graph: {self._named_graph}, repository:"
                 f" {self._repository}"
             )
 
@@ -974,13 +860,37 @@ WHERE {{
     """ Convenience """
 
     def is_subclass(self, subclass_iri: str, class_iri: str) -> bool:
+        """
+        Determines whether a given class (subclass_iri) is a subclass of another class (class_iri)
+        based on the "rdfs:subClassOf" relationship.
+
+        Args:
+            subclass_iri (str): The IRI of the potential subclass.
+            class_iri (str): The IRI of the potential superclass.
+
+        Returns:
+            bool: True if subclass_iri is a subclass of class_iri, False otherwise.
+        """
         return self.triple_exists(subclass_iri, "rdfs:subClassOf", class_iri)
 
     def owl_is_named_individual(self, iri: str) -> bool:
+        """
+        Checks if the given IRI corresponds to an OWL named individual.
+
+        This method verifies whether the provided IRI is explicitly defined as
+        an `owl:NamedIndividual` in the RDF graph by checking for the existence
+        of the triple (IRI, rdf:type, owl:NamedIndividual). If the triple does
+        not exist, a warning is logged.
+
+        Args:
+            iri (str): The IRI to be checked.
+
+        Returns:
+            bool: True if the IRI is a named individual, False otherwise.
+        """
         if not self.triple_exists(iri, "rdf:type", "owl:NamedIndividual"):
             LOGGER.warning(f"IRI {iri} is not a named individual!")
             return False
-
         return True
 
     def owl_get_classes_of_individual(
@@ -989,6 +899,26 @@ WHERE {{
         ignored_prefixes: Optional[List[str]] = None,
         local_name: bool = True,
     ) -> List[str]:
+        """
+        Retrieves the OWL classes associated with a given individual (instance IRI)
+        from a graph database.
+        Args:
+            instance_iri (str): The IRI of the individual whose classes are to be retrieved.
+            ignored_prefixes (Optional[List[str]]): A list of prefixes to ignore when
+                filtering classes. Defaults to ["owl", "rdfs"] if not provided.
+            local_name (bool): If True, returns the local names of the classes
+                (i.e., the part of the IRI after the last '#', '/', or ':').
+                Defaults to True.
+        Returns:
+            List[str]: A list of class IRIs or local names (depending on the value
+            of `local_name`) associated with the given individual.
+        Notes:
+            - The method constructs a SPARQL query to retrieve the classes of the
+              individual and applies optional filtering based on ignored prefixes.
+            - If no results are found, an empty list is returned.
+            - The `utils.get_local_name` function is used to extract the local name
+              from the IRI if `local_name` is set to True.
+        """
         ignored_prefixes = (
             ignored_prefixes if ignored_prefixes is not None else ["owl", "rdfs"]
         )
@@ -1007,15 +937,26 @@ WHERE {{
         else:
             filter_conditions = ""
 
-        query = f"""
-        SELECT ?class
-        WHERE {{
-            ?class rdf:type owl:Class .
-            {instance_iri} rdf:type ?class .
-                {filter_conditions}
-        }}
-        """
-        results = self.query(query=query)
+        query = SPARQLQuery(
+            named_graph=self._named_graph,
+            prefixes=self._prefixes,
+            include_explicit=True,
+            include_implicit=True,
+        )
+
+        query.add_select_block(
+            variables=["?class"],
+            where_clauses=[
+                f"?class rdf:type owl:Class .",
+                f"{utils.prepare_subject(instance_iri)} rdf:type ?class .",
+                filter_conditions,
+            ],
+        )
+
+        query_string = query.to_string(validate=True)
+
+        print(query_string)
+        results = self.query(query=query_string)
 
         if results is None:
             return []

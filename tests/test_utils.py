@@ -1,5 +1,9 @@
 from graph_db_interface.utils import utils
-from graph_db_interface.exceptions import InvalidIRIError
+from graph_db_interface.exceptions import (
+    InvalidIRIError,
+    InvalidInputError,
+    InvalidQueryError,
+)
 import pytest
 from rdflib import Literal
 import datetime
@@ -18,9 +22,9 @@ def test_validate_query():
         ?s ?p
     }
     """
-
-    assert utils.validate_query(valid_query) is True
-    assert utils.validate_query(invalid_query) is False
+    utils.validate_query(valid_query)
+    with pytest.raises(InvalidQueryError):
+        utils.validate_query(invalid_query)
 
 
 def test_validate_update_query():
@@ -38,8 +42,9 @@ def test_validate_update_query():
         }
     }
     """
-    assert utils.validate_update_query(valid_query) is True
-    assert utils.validate_update_query(invalid_query) is False
+    utils.validate_update_query(valid_query)
+    with pytest.raises(InvalidQueryError):
+        utils.validate_update_query(invalid_query)
 
 
 def test_ensure_absolute():
@@ -62,27 +67,27 @@ def test_strip_angle_brackets():
     assert iri == utils.strip_angle_brackets(iri)
 
 
-# def test_to_literal():
-#     literal_str = utils.to_literal(42, as_string=True)
-#     assert literal_str == '"42"^^<http://www.w3.org/2001/XMLSchema#integer>'
+def test_to_literal():
+    literal_str = utils.to_literal(42, as_string=True)
+    assert literal_str == '"42"^^<http://www.w3.org/2001/XMLSchema#integer>'
 
-#     literal_str = utils.to_literal(True, as_string=True)
-#     assert literal_str == '"true"^^<http://www.w3.org/2001/XMLSchema#boolean>'
+    literal_str = utils.to_literal(True, as_string=True)
+    assert literal_str == '"true"^^<http://www.w3.org/2001/XMLSchema#boolean>'
 
-#     literal_str = utils.to_literal(42.5, as_string=True)
-#     assert literal_str == '"42.5"^^<http://www.w3.org/2001/XMLSchema#double>'
+    literal_str = utils.to_literal(42.5, as_string=True)
+    assert literal_str == '"42.5"^^<http://www.w3.org/2001/XMLSchema#double>'
 
-#     literal_str = utils.to_literal("Hello", as_string=True)
-#     assert literal_str == '"Hello"^^<http://www.w3.org/2001/XMLSchema#string>'
+    literal_str = utils.to_literal("Hello", as_string=True)
+    assert literal_str == '"Hello"^^<http://www.w3.org/2001/XMLSchema#string>'
 
-#     literal_str = utils.to_literal(False, as_string=True)
-#     assert literal_str == '"false"^^<http://www.w3.org/2001/XMLSchema#boolean>'
+    literal_str = utils.to_literal(False, as_string=True)
+    assert literal_str == '"false"^^<http://www.w3.org/2001/XMLSchema#boolean>'
 
-#     literal_str = utils.to_literal(-123, as_string=True)
-#     assert literal_str == '"-123"^^<http://www.w3.org/2001/XMLSchema#integer>'
+    literal_str = utils.to_literal(-123, as_string=True)
+    assert literal_str == '"-123"^^<http://www.w3.org/2001/XMLSchema#integer>'
 
-#     literal_str = utils.to_literal(0.0, as_string=True)
-#     assert literal_str == '"0.0"^^<http://www.w3.org/2001/XMLSchema#double>'
+    literal_str = utils.to_literal(0.0, as_string=True)
+    assert literal_str == '"0.0"^^<http://www.w3.org/2001/XMLSchema#double>'
 
 
 def test_from_xsd_literal():
@@ -179,38 +184,132 @@ def test_is_shorthand_iri():
     assert utils.is_shorthand_iri("ex:subject", prefixes={}) is True
 
 
+def test_prepare_subject():
+    # provide absolute IRI
+    assert (
+        utils.prepare_subject("<http://example.org/subject>", ensure_iri=True)
+        == "<http://example.org/subject>"
+    )
+    assert (
+        utils.prepare_subject("<http://example.org/subject>", ensure_iri=False)
+        == "<http://example.org/subject>"
+    )
+
+    # provide IRI, should be turned into absolute IRI
+    assert (
+        utils.prepare_subject("http://example.org/subject", ensure_iri=True)
+        == "<http://example.org/subject>"
+    )
+    assert (
+        utils.prepare_subject("http://example.org/subject", ensure_iri=False)
+        == "<http://example.org/subject>"
+    )
+
+    # provide shorthand IRI, should be kept as is
+    assert utils.prepare_subject("ex:subject", ensure_iri=True) == "ex:subject"
+    assert utils.prepare_subject("ex:subject", ensure_iri=False) == "ex:subject"
+
+    # simple strings should be returned as is
+    assert utils.prepare_subject("Hello", ensure_iri=False) == "Hello"
+    with pytest.raises(InvalidIRIError):
+        utils.prepare_subject("Hello", ensure_iri=True)
+
+    # Literals should not be provided as subjects
+    with pytest.raises(InvalidInputError):
+        utils.prepare_subject(Literal("Hello"), ensure_iri=True)
+    with pytest.raises(InvalidInputError):
+        utils.prepare_subject(Literal(42.5), ensure_iri=True)
+    with pytest.raises(InvalidInputError):
+        utils.prepare_subject(Literal(42.5), ensure_iri=False)
+
+
+def test_prepare_predicate():
+    # provide absolute IRI
+    assert (
+        utils.prepare_predicate("<http://example.org/predicate>", ensure_iri=True)
+        == "<http://example.org/predicate>"
+    )
+    assert (
+        utils.prepare_predicate("<http://example.org/predicate>", ensure_iri=False)
+        == "<http://example.org/predicate>"
+    )
+
+    # provide IRI, should be turned into absolute IRI
+    assert (
+        utils.prepare_predicate("http://example.org/predicate", ensure_iri=True)
+        == "<http://example.org/predicate>"
+    )
+    assert (
+        utils.prepare_predicate("http://example.org/predicate", ensure_iri=False)
+        == "<http://example.org/predicate>"
+    )
+
+    # provide shorthand IRI, should be kept as is
+    assert utils.prepare_predicate("ex:predicate", ensure_iri=True) == "ex:predicate"
+    assert utils.prepare_predicate("ex:predicate", ensure_iri=False) == "ex:predicate"
+
+    # simple strings should be returned as is
+    assert utils.prepare_predicate("Hello", ensure_iri=False) == "Hello"
+    with pytest.raises(InvalidIRIError):
+        utils.prepare_predicate("Hello", ensure_iri=True)
+
+    # Literals should not be provided as predicates
+    with pytest.raises(InvalidInputError):
+        utils.prepare_predicate(Literal("Hello"), ensure_iri=True)
+    with pytest.raises(InvalidInputError):
+        utils.prepare_predicate(Literal(42.5), ensure_iri=True)
+    with pytest.raises(InvalidInputError):
+        utils.prepare_predicate(Literal(42.5), ensure_iri=False)
+
+
 def test_prepare_object():
     # provide absolute IRI
     assert (
-        utils.prepare_object("<http://example.org/subject>")
+        utils.prepare_object("<http://example.org/subject>", ensure_iri=True)
         == "<http://example.org/subject>"
     )
+    assert (
+        utils.prepare_object("<http://example.org/subject>", ensure_iri=False)
+        == "<http://example.org/subject>"
+    )
+
     # provide IRI, should be turned into absolute IRI
     assert (
-        utils.prepare_object("http://example.org/subject")
+        utils.prepare_object("http://example.org/subject", ensure_iri=True)
         == "<http://example.org/subject>"
     )
+    assert (
+        utils.prepare_object("http://example.org/subject", ensure_iri=False)
+        == "<http://example.org/subject>"
+    )
+
     # provide shorthand IRI, should be kept as is
+    assert utils.prepare_object("ex:subject", ensure_iri=True) == "ex:subject"
     assert utils.prepare_object("ex:subject", ensure_iri=False) == "ex:subject"
 
-    # 
+    # Literals
+    assert utils.prepare_object(Literal(42)) == Literal(42)
     assert (
-        utils.prepare_object(0.5, as_string=True)
-        == '"0.5"^^<http://www.w3.org/2001/XMLSchema#double>'
-    )
-    assert utils.prepare_object(0.5, as_string=False) == Literal(
-        0.5, datatype="http://www.w3.org/2001/XMLSchema#double"
+        utils.prepare_object(Literal(42), as_string=True)
+        == '"42"^^<http://www.w3.org/2001/XMLSchema#integer>'
     )
     with pytest.raises(InvalidIRIError):
-        utils.prepare_object(0.5, ensure_iri=True)
+        utils.prepare_object(Literal(42), ensure_iri=True)
 
-    # assert utils.prepare_object("0.5", as_string=True) == "0.5"
+    # Simple strings should not be converted since they might be used for filtering
+    assert utils.prepare_object("Hello", as_string=True) == "Hello"
+    assert utils.prepare_object("Hello", as_string=False) == "Hello"
+    with pytest.raises(InvalidIRIError):
+        utils.prepare_object("Hello", ensure_iri=True)
 
-    # assert (
-    #     utils.prepare_object(Literal("Hello"), as_string=True)
-    #     == '"\\"Hello\\""^^<http://www.w3.org/2001/XMLSchema#string>'
-    # )
-    # assert utils.prepare_object(Literal(42)) == Literal(42)
+    # Standard Python types
+    assert (
+        utils.prepare_object(42.5, as_string=True)
+        == '"42.5"^^<http://www.w3.org/2001/XMLSchema#double>'
+    )
+    assert utils.prepare_object(42.5, as_string=False) == Literal(42.5)
+    with pytest.raises(InvalidIRIError):
+        utils.prepare_object(42.5, ensure_iri=True)
 
 
 def test_encapsulate_named_graph():

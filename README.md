@@ -1,5 +1,10 @@
 # graph_db_interface
 
+[![PyPI version](https://badge.fury.io/py/graph-db-interface.svg)](https://badge.fury.io/py/graph-db-interface)
+![Python](https://img.shields.io/badge/python-%3E=3.9-blue)
+![License](https://img.shields.io/github/license/JaFeKl/graph_db_interface)
+
+
 This repository acts as an interface to abstract SPARQL queries to callable methods to interact with a running GraphDB instance in an easier way.
 
 # Installation
@@ -11,7 +16,7 @@ To install the current PyPI release, simply run the following command using your
 pip install graph-db-interface
 ```
 
-After cloning this repository you can also use poetry to install the package:
+Or after cloning this repository you can also use poetry to install the package:
 ```bash
 poetry install
 ```
