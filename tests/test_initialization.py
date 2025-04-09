@@ -1,8 +1,9 @@
 import pytest
 from graph_db_interface import GraphDB
+from graph_db_interface.exceptions import AuthenticationError, InvalidRepositoryError
 
 
-def test_credentials_valid(db):
+def test_credentials_valid(db: GraphDB):
     """Test successfull initialization"""
     try:
         GraphDB(
@@ -15,9 +16,9 @@ def test_credentials_valid(db):
         pytest.fail(f"Unexpected error raised: {e}")
 
 
-def test_credentials_invalid(db):
+def test_credentials_invalid(db: GraphDB):
     """Test invalid credentials used"""
-    with pytest.raises(ValueError):
+    with pytest.raises(AuthenticationError):
         GraphDB(
             base_url=db._base_url,
             username=db._username,
@@ -26,9 +27,9 @@ def test_credentials_invalid(db):
         )
 
 
-def test_invalid_repository(db):
+def test_invalid_repository(db: GraphDB):
     """Test an invalid selected repository"""
-    with pytest.raises(ValueError):
+    with pytest.raises(InvalidRepositoryError):
         GraphDB(
             base_url=db._base_url,
             username=db._username,

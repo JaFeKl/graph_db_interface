@@ -6,7 +6,7 @@ from graph_db_interface import GraphDB
 
 
 @pytest.fixture(scope="session")
-def db():
+def db() -> GraphDB:
     """Fixture to create a GraphDB client."""
     for env_var in [
         "GRAPHDB_URL",
