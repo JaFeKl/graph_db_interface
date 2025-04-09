@@ -1,3 +1,5 @@
+from graph_db_interface import GraphDB
+
 TEST_TTL_DATA = """@prefix ex: <http://example.org/> .
 @prefix foaf: <http://xmlns.com/foaf/0.1/> .
 
@@ -10,7 +12,7 @@ ex:Bob a foaf:Person ;
 """
 
 
-def test_add_and_delete_named_graph(db):
+def test_add_and_delete_named_graph(db: GraphDB):
     response = db.named_graph_add(
         TEST_TTL_DATA, "https://my_test_graph", "application/x-turtle"
     )
