@@ -897,21 +897,30 @@ class GraphDB:
         self,
         instance_iri: str,
         ignored_prefixes: Optional[List[str]] = None,
-        local_name: bool = True,
+        local_name: bool = False,
+        include_explicit=True,
+        include_implicit=False,
     ) -> List[str]:
         """
         Retrieves the OWL classes associated with a given individual (instance IRI)
         from a graph database.
+
         Args:
             instance_iri (str): The IRI of the individual whose classes are to be retrieved.
             ignored_prefixes (Optional[List[str]]): A list of prefixes to ignore when
-                filtering classes. Defaults to ["owl", "rdfs"] if not provided.
+            filtering classes. Defaults to ["owl", "rdfs"] if not provided.
             local_name (bool): If True, returns the local names of the classes
-                (i.e., the part of the IRI after the last '#', '/', or ':').
-                Defaults to True.
+            (i.e., the part of the IRI after the last '#', '/', or ':').
+            Defaults to False.
+            include_explicit (bool): If True, includes explicitly defined triples in the query.
+            Defaults to True.
+            include_implicit (bool): If True, includes implicitly inferred triples in the query.
+            Defaults to False.
+
         Returns:
             List[str]: A list of class IRIs or local names (depending on the value
             of `local_name`) associated with the given individual.
+
         Notes:
             - The method constructs a SPARQL query to retrieve the classes of the
               individual and applies optional filtering based on ignored prefixes.
@@ -940,8 +949,8 @@ class GraphDB:
         query = SPARQLQuery(
             named_graph=self._named_graph,
             prefixes=self._prefixes,
-            include_explicit=True,
-            include_implicit=True,
+            include_explicit=include_explicit,
+            include_implicit=include_implicit,
         )
 
         query.add_select_block(
@@ -955,7 +964,6 @@ class GraphDB:
 
         query_string = query.to_string(validate=True)
 
-        print(query_string)
         results = self.query(query=query_string)
 
         if results is None:
