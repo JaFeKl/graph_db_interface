@@ -889,7 +889,7 @@ class GraphDB:
             bool: True if the IRI is a named individual, False otherwise.
         """
         if not self.triple_exists(iri, "rdf:type", "owl:NamedIndividual"):
-            LOGGER.warning(f"IRI {iri} is not a named individual!")
+            LOGGER.debug(f"IRI {iri} is not a named individual!")
             return False
         return True
 

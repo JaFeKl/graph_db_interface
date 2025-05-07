@@ -19,7 +19,7 @@ def validate_query(query: str):
         prepareQuery(query)
         return True
     except Exception as e:
-        error_message = f"SPAQRQL query validation failed (update query): {e}"
+        error_message = f"SPAQRQL query validation failed: {e}"
         LOGGER.error(error_message)
         raise InvalidQueryError(error_message)
 
@@ -30,7 +30,7 @@ def validate_update_query(query: str):
         g.update(query)
         return True
     except Exception as e:
-        error_message = f"SPAQRQL query validation failed (update query): {e}"
+        error_message = f"SPAQRQL update query validation failed: {e}"
         LOGGER.error(error_message)
         raise InvalidQueryError(error_message)
 
