@@ -84,11 +84,11 @@ WHERE {{
 
     def add_insert_data_block(
         self,
-        tiples: List[Tuple[str]],
+        triples: List[Tuple[str]],
     ) -> str:
         block_parts = []
         data_combined = "\n".join(
-            f"{triple[0]} {triple[1]} {triple[2]} ." for triple in tiples
+            f"{triple[0]} {triple[1]} {triple[2]} ." for triple in triples
         )
         block_parts.append(
             f"""INSERT DATA {{
@@ -101,11 +101,11 @@ WHERE {{
 
     def add_delete_data_block(
         self,
-        tiples: List[Tuple[str]],
+        triples: List[Tuple[str]],
     ) -> str:
         block_parts = []
         data_combined = "\n".join(
-            f"{triple[0]} {triple[1]} {triple[2]} ." for triple in tiples
+            f"{triple[0]} {triple[1]} {triple[2]} ." for triple in triples
         )
         block_parts.append(
             f"""DELETE DATA {{
@@ -118,22 +118,22 @@ WHERE {{
 
     def add_delete_insert_data_block(
         self,
-        delete_tiples: List[Tuple[str]],
-        insert_tiples: List[Tuple[str]],
+        delete_triples: List[Tuple[str]],
+        insert_triples: List[Tuple[str]],
         where_clauses: List[str],
     ):
         block_parts = []
         if self._named_graph:
             block_parts.append(f"WITH {utils.ensure_absolute(self._named_graph)}")
-        delete_tiples_combined = "\n".join(
-            f"{triple[0]} {triple[1]} {triple[2]} ." for triple in delete_tiples
+        delete_triples_combined = "\n".join(
+            f"{triple[0]} {triple[1]} {triple[2]} ." for triple in delete_triples
         )
-        block_parts.append(f"DELETE {{{delete_tiples_combined}}}")
+        block_parts.append(f"DELETE {{{delete_triples_combined}}}")
 
-        insert_tiples_combined = "\n".join(
-            f"{triple[0]} {triple[1]} {triple[2]} ." for triple in insert_tiples
+        insert_triples_combined = "\n".join(
+            f"{triple[0]} {triple[1]} {triple[2]} ." for triple in insert_triples
         )
-        block_parts.append(f"INSERT {{{insert_tiples_combined}}}")
+        block_parts.append(f"INSERT {{{insert_triples_combined}}}")
 
         block_parts.append(f"WHERE {{{self._combine_where_clauses(where_clauses)}}}")
         block = "\n".join(block_parts)
@@ -645,7 +645,7 @@ class GraphDB:
             prefixes=self._prefixes,
         )
         query.add_insert_data_block(
-            tiples=[(sub, pred, obj)],
+            triples=[(sub, pred, obj)],
         )
         query_string = query.to_string()
         if query_string is None:
@@ -691,7 +691,7 @@ class GraphDB:
             prefixes=self._prefixes,
         )
         query.add_delete_data_block(
-            tiples=[(sub, pred, obj)],
+            triples=[(sub, pred, obj)],
         )
         query_string = query.to_string()
 
@@ -790,8 +790,8 @@ class GraphDB:
             prefixes=self._prefixes,
         )
         query.add_delete_insert_data_block(
-            delete_tiples=[(sub_old, pred_old, obj_old)],
-            insert_tiples=[(update_sub, update_pred, update_obj)],
+            delete_triples=[(sub_old, pred_old, obj_old)],
+            insert_triples=[(update_sub, update_pred, update_obj)],
             where_clauses=[f"{sub_old} {pred_old} {obj_old} ."],
         )
         query_string = query.to_string(validate=True)
