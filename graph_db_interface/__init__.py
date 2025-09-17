@@ -1,9 +1,8 @@
 import logging
-from .graph_db_interface import GraphDB, SPARQLQuery
-
+from .sparql_query import SPARQLQuery
+from .graph_db import GraphDB
 
 LOGGER = logging.getLogger(__name__)
-
 
 handler = logging.StreamHandler()
 handler.setFormatter(logging.Formatter(logging.BASIC_FORMAT))
