@@ -814,6 +814,88 @@ class GraphDB:
             )
 
         return result
+    
+    def triples_update(
+        self,
+        old_triples: List[Tuple[str, str, Union[str, Literal]]],
+        new_triples: List[Tuple[Optional[str], Optional[str], Optional[Union[str, Literal]]]],
+        check_exist: bool = True,
+    ) -> bool:
+        """
+        Update multiple RDF triples in the triplestore.
+
+        Args:
+            old_triples (List[Tuple[str, str, Union[str, Literal]]]): A list of triples to update, where each triple is represented as a tuple (subject, predicate, object).
+            new_triples (List[Tuple[Optional[str], Optional[str], Optional[Union[str, Literal]]]]): A list of new triples to replace the old triples.
+            check_exist (bool): Whether to check for the existence of old triples before updating.
+
+        Returns:
+            bool: True if the update was successful, False otherwise.
+        """
+        if not old_triples or not new_triples :
+            raise InvalidInputError("Old and new triples lists must not be empty.")
+        
+        if len(old_triples) != len(new_triples):
+            raise InvalidInputError("Old and new triples lists must have the same length.")
+        
+        delete_triples = []
+        insert_triples = []
+        where_clauses = []
+
+        for triple in old_triples:
+            if len(triple) != 3:
+                raise InvalidInputError("Each old triple must have exactly three elements (subject, predicate, object).")
+            sub_old, pred_old, obj_old = triple
+            if check_exist:
+                if not self.triple_exists(sub_old, pred_old, obj_old):
+                    LOGGER.warning(f"Triple does not exist: {sub_old} {pred_old} {obj_old}")
+                    return False
+            
+            sub_old = utils.prepare_subject(sub_old, ensure_iri=True)
+            pred_old = utils.prepare_predicate(pred_old, ensure_iri=True)
+            obj_old = utils.prepare_object(obj_old, as_string=True)
+            delete_triples.append((sub_old, pred_old, obj_old))
+            where_clauses.append(f"{sub_old} {pred_old} {obj_old} .")
+        
+        for triple in new_triples:
+            if len(triple) != 3:
+                raise InvalidInputError("Each new triple must have exactly three elements (subject, predicate, object).")
+            sub_new, pred_new, obj_new = triple
+            
+            if sub_new is not None:
+                sub_new = utils.prepare_subject(sub_new, ensure_iri=True)
+            if pred_new is not None:
+                pred_new = utils.prepare_predicate(pred_new, ensure_iri=True)
+            if obj_new is not None:
+                obj_new = utils.prepare_object(obj_new, as_string=True)
+            insert_triples.append((sub_new, pred_new, obj_new))
+            
+        query = SPARQLQuery(
+            named_graph=self._named_graph,
+            prefixes=self._prefixes,
+        )
+        query.add_delete_insert_data_block(
+            delete_triples=delete_triples,
+            insert_triples=insert_triples,
+            where_clauses=where_clauses
+        )
+        query_string = query.to_string(validate=True)
+        if query_string is None:
+            return False
+        result = self.query(query=query_string, update=True)
+        if result:
+            LOGGER.debug(
+                f"Successfully updated triples {old_triples} -> {new_triples}, named_graph: {self._named_graph}, repository:"
+                f" {self._repository}"
+            )
+        else:
+            LOGGER.warning(
+                f"Failed to update triples {old_triples} -> {new_triples}, named_graph: {self._named_graph}, repository:"
+                f" {self._repository}"
+            )
+        return result
+
+        
 
     """RDF4J REST API - Graph Store : Named graph management"""
 
