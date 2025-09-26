@@ -10,6 +10,7 @@ from graph_db_interface.exceptions import (
     InvalidInputError,
     InvalidRepositoryError,
     AuthenticationError,
+    GraphDbException
 )
 
 
@@ -363,7 +364,9 @@ class GraphDB:
             LOGGER.error(
                 f"Error while querying GraphDB ({status_code}) - {response.text}"
             )
+            raise GraphDbException(f"Error while querying GraphDB ({status_code}) - {response.text}")
             return False if update else None
+        
 
         return True if update else response.json()
 
