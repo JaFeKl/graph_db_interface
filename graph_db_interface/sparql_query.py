@@ -40,7 +40,7 @@ class SPARQLQuery:
     ) -> str:
         block_parts = []
         block_parts.append(
-            f"{select_type.name} {self._create_variable_string(variables)}"
+            f"{select_type.value} {self._create_variable_string(variables)}"
         )
         part = self._add_explicit_implicit()
         if self._named_graph:
@@ -49,7 +49,7 @@ class SPARQLQuery:
             block_parts.append(part)
         block_parts.append(f"WHERE {{{self._combine_where_clauses(where_clauses)}}}")
         block = "\n".join(block_parts)
-        self._query_blocks.append({"type": SPARQLQueryType.SELECT, "data": block})
+        self._query_blocks.append({"type": select_type, "data": block})
 
     def add_ask_block(
         self,
