@@ -97,12 +97,14 @@ def triples_get(
 def triples_add(
     self,
     triples_to_add: List[Tuple[str, str, Any]],
+    check_exist: bool = True,
 ) -> bool:
     """
     Adds multiple triples to the graph database.
 
     Args:
         triples_to_add (List[Tuple[str, str, Any]]): A list of triples to add, where each triple is represented as a tuple (subject, predicate, object).
+        check_exist (bool, optional): Flag to check if any of the triples already exists. Then, no triple will be added. In Defaults to True.
 
     Returns:
         bool: True if all triples were successfully added, False otherwise.
@@ -122,6 +124,24 @@ def triples_add(
             return False
         prepared_triples.append((sub, pred, obj))
 
+    if check_exist:
+        ask_query = SPARQLQuery(
+            named_graph=self._named_graph,
+            prefixes=self._prefixes,
+        )
+        ask_query.add_ask_block(
+            where_clauses=[
+                f"{sub} {pred} {obj} ." for sub, pred, obj in prepared_triples
+            ],
+        )
+        ask_query_string = ask_query.to_string()
+        if ask_query_string is None:
+            return False
+        ask_result = self.query(query=ask_query_string, update=False)
+        if ask_result is not None and ask_result["boolean"]:
+            LOGGER.warning("One of the triples to add already exists in the graph.")
+            return False
+
     query = SPARQLQuery(
         named_graph=self._named_graph,
         prefixes=self._prefixes,
@@ -129,6 +149,15 @@ def triples_add(
     query.add_insert_data_block(
         triples=prepared_triples,
     )
+
+    # if check_exist:
+    #     query.add_insert_exists_block(
+    #         triples=prepared_triples,
+    #     )
+    # else:
+    #     query.add_insert_data_block(
+    #         triples=prepared_triples,
+    #     )
 
     query_string = query.to_string()
     if query_string is None:
