@@ -9,8 +9,10 @@ LOGGER.setLevel(logging.WARNING)
 
 from .sparql_query import SPARQLQuery
 from .graph_db import GraphDB
+from .utils.pretty_print import format_result
 
 __all__ = [
     "GraphDB",
-    "SPARQLQuery"
+    "SPARQLQuery",
+    "format_result"
 ]
