@@ -1,9 +1,6 @@
-import logging
 from enum import Enum
 from typing import List, Optional, Dict, Tuple
 from graph_db_interface.utils import utils
-
-LOGGER = logging.getLogger(__name__)
 
 class SPARQLQueryType(Enum):
     """Enum for different SPARQL query types."""

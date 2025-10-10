@@ -2,7 +2,7 @@ from graph_db_interface import GraphDB
 
 
 def test_get_repositories(db: GraphDB, repositories):
-    _repositories = db.get_list_of_repositories()
+    _repositories = db._get_list_of_repositories()
     ids = [repo["id"] for repo in _repositories]  # get only the ids of each repo
     assert sorted(ids) == sorted(repositories)  # compare to the expected repositories
 
