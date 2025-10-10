@@ -9,8 +9,10 @@ LOGGER.setLevel(logging.WARNING)
 
 from .sparql_query import SPARQLQuery
 from .graph_db import GraphDB
+from .utils.processing import process_bindings_select
 
 __all__ = [
     "GraphDB",
-    "SPARQLQuery"
+    "SPARQLQuery",
+    "process_bindings_select"
 ]
