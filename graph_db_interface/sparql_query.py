@@ -12,6 +12,7 @@ class SPARQLQueryType(Enum):
     DESCRIBE = "DESCRIBE"
     ASK = "ASK"
     INSERT_DATA = "INSERT DATA"
+    INSERT_EXISTS = "INSERT EXISTS"
     DELETE_DATA = "DELETE DATA"
     DELETE_INSERT = "DELETE/INSERT"
 
@@ -83,6 +84,26 @@ WHERE {{
         )
         block = "\n".join(block_parts)
         self._query_blocks.append({"type": SPARQLQueryType.INSERT_DATA, "data": block})
+
+    def add_insert_exists_block(
+        self,
+        triples: List[Tuple[str]],
+    ) -> str:
+        block_parts = []
+        data_combined = "\n".join(
+            f"{triple[0]} {triple[1]} {triple[2]} ." for triple in triples
+        )
+        block_parts.append(
+            f"""INSERT {{
+        {utils.encapsulate_named_graph(self._named_graph, data_combined)}
+}}
+WHERE {{ FILTER NOT EXISTS {{
+    {utils.encapsulate_named_graph(self._named_graph, data_combined)}
+}} }}
+"""
+        )
+        block = "\n".join(block_parts)
+        self._query_blocks.append({"type": SPARQLQueryType.INSERT_EXISTS, "data": block})
 
     def add_delete_data_block(
         self,
@@ -172,6 +193,7 @@ WHERE {{
 
             elif self._query_blocks[0]["type"] in (
                 SPARQLQueryType.INSERT_DATA,
+                SPARQLQueryType.INSERT_EXISTS,
                 SPARQLQueryType.DELETE_DATA,
                 SPARQLQueryType.DELETE_INSERT,
             ):
