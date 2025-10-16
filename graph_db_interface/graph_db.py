@@ -36,7 +36,7 @@ class GraphDB:
             token = bytes(f"{self._username}:{self._password}", "utf-8")
             self._auth = f"Basic {b64encode(token).decode()}"
 
-        self._repositories = self._get_list_of_repositories(only_ids=True)
+        self._repositories = self.get_list_of_repositories(only_ids=True)
         self.repository = repository
 
         self._prefixes = {}
@@ -81,7 +81,7 @@ class GraphDB:
         else:
             self._named_graph = None
 
-    def _get_list_of_repositories(
+    def get_list_of_repositories(
         self, only_ids: bool = False
     ) -> Union[List[str], List[dict], None]:
         """Get a list of all existing repositories on the GraphDB instance.
