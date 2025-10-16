@@ -24,15 +24,3 @@ def db() -> GraphDB:
         password=os.getenv("GRAPHDB_PASSWORD"),
         repository=os.getenv("GRAPHDB_REPOSITORY"),
     )
-
-
-@pytest.fixture(scope="session")
-def repositories():
-    """Fixture to retrieve all configured GraphDB repositories."""
-    env_var = "GRAPHDB_REPOSITORIES"
-
-    if os.getenv(env_var) is None:
-        print(f"Missing environment variable '{env_var}'.", file=sys.stderr)
-        sys.exit(1)
-
-    return json.loads(os.getenv(env_var))
