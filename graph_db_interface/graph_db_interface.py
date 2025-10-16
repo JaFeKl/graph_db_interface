@@ -225,10 +225,10 @@ class GraphDB:
         self.repository = repository
 
         self._prefixes = {}
-        self._add_prefix("owl", "<http://www.w3.org/2002/07/owl#>")
-        self._add_prefix("rdf", "<http://www.w3.org/1999/02/22-rdf-syntax-ns#>")
-        self._add_prefix("rdfs", "<http://www.w3.org/2000/01/rdf-schema#>")
-        self._add_prefix("onto", "<http://www.ontotext.com/>")
+        self.add_prefix("owl", "<http://www.w3.org/2002/07/owl#>")
+        self.add_prefix("rdf", "<http://www.w3.org/1999/02/22-rdf-syntax-ns#>")
+        self.add_prefix("rdfs", "<http://www.w3.org/2000/01/rdf-schema#>")
+        self.add_prefix("onto", "<http://www.ontotext.com/>")
 
         self.named_graph = named_graph
 
@@ -313,8 +313,6 @@ class GraphDB:
             " Please make sure, that your provided credentials are valid."
         )
 
-
-
     def _get_prefix_string(self) -> str:
         return (
             "\n".join(
@@ -329,7 +327,6 @@ class GraphDB:
 
         return ""
 
-
     def add_prefix(self, prefix: str, iri: str):
         self._prefixes[prefix] = utils.ensure_absolute(iri)
 
@@ -338,7 +335,7 @@ class GraphDB:
             del self._prefixes[prefix]
             return True
         return False
-    
+
     def get_prefixes(self) -> Dict[str, str]:
         return self._prefixes
 
