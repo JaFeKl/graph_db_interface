@@ -1,0 +1,26 @@
+stages:
+  - test
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - when: never
+
+before_script:
+  - python --version
+  - pip install --upgrade pip
+  - pip install poetry
+  - poetry config virtualenvs.create true
+  - poetry config virtualenvs.in-project true
+  - poetry lock
+  - poetry install --with dev
+
+
+test:
+  image: python:3.11
+  stage: test
+  script:
+    - echo "GRAPHDB_URL is $GRAPHDB_URL"  # Will show the GitLab variable
+    - echo "GRAPHDB_REPOSITORY is $GRAPHDB_REPOSITORY"  # Will show the GitLab variable
+    - poetry run pytest tests/ -v --tb=short
