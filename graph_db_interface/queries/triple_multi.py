@@ -98,6 +98,7 @@ def triples_add(
     self,
     triples_to_add: List[Tuple[str, str, Any]],
     check_exist: bool = True,
+    named_graph: Optional[str] = None,
 ) -> bool:
     """
     Adds multiple triples to the graph database.
@@ -162,11 +163,18 @@ def triples_add(
     query_string = query.to_string()
     if query_string is None:
         return False
+    
+    if named_graph:
+        old_named_graph = self._named_graph
+        self.set_named_graph(named_graph)
 
     result = self.query(query=query_string, update=True)
     if not result:
         LOGGER.warning(f"Failed to add triples: {prepared_triples}")
         return False
+    
+    if named_graph:
+        self.set_named_graph(old_named_graph)
 
     return result
 

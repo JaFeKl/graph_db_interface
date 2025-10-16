@@ -3,12 +3,11 @@
 from typing import Union, Any, Optional
 from rdflib import Literal
 from graph_db_interface.utils import utils
-from graph_db_interface.exceptions import (
-    InvalidInputError
-)
+from graph_db_interface.exceptions import InvalidInputError
 
 from ..sparql_query import SPARQLQuery
 from .. import LOGGER
+
 
 def triple_exists(
     self,
@@ -51,11 +50,13 @@ def triple_exists(
     )
     return False
 
+
 def triple_add(
     self,
     sub: str,
     pred: str,
     obj: Any,
+    named_graph: Optional[str] = None,
 ) -> bool:
     """
     Adds a triple (subject, predicate, object) to the graph database.
@@ -91,13 +92,20 @@ def triple_add(
     if query_string is None:
         return False
 
+    if named_graph:
+        old_named_graph = self._named_graph
+        self.set_named_graph(named_graph)
     result = self.query(query=query_string, update=True)
     if result:
         LOGGER.debug(
             f"New triple inserted: {sub}, {pred}, {obj} named_graph:"
             f" {self._named_graph}, repository: {self._repository}"
         )
+
+    if named_graph:
+        self.set_named_graph(old_named_graph)
     return result
+
 
 def triple_delete(
     self,
@@ -146,6 +154,7 @@ def triple_delete(
         LOGGER.warning(f"Failed to delete triple: {sub} {pred} {obj}")
 
     return result
+
 
 def triple_update(
     self,
