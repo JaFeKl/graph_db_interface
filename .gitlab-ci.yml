@@ -16,4 +16,5 @@ test:
   stage: test
   script:
     - echo "GRAPHDB_URL is $GRAPHDB_URL"  # Will show the GitLab variable
+    - echo "GRAPHDB_REPOSITORY is $GRAPHDB_REPOSITORY"  # Will show the GitLab variable
     - poetry run pytest tests/ -v --tb=short
