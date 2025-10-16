@@ -1,0 +1,13 @@
+stages:
+  - test
+
+before_script:
+  - python --version
+  - pip install --upgrade pip
+  - pip install -e .
+
+test:
+  image: python:3.9
+  stage: test
+  script:
+    - pytest tests/
