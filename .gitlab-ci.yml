@@ -4,10 +4,13 @@ stages:
 before_script:
   - python --version
   - pip install --upgrade pip
-  - pip install -e .
+  - pip install poetry
+  - poetry config virtualenvs.create true
+  - poetry config virtualenvs.in-project true
+  - poetry install --with dev
 
 test:
   image: python:3.9
   stage: test
   script:
-    - pytest tests/
+    - poetry run pytest tests/ -v --tb=short
