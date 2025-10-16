@@ -276,3 +276,60 @@ def test_convenience_functions(db: GraphDB):
 
     result = db.triple_delete(object, "rdf:type", "owl:Class")
     assert result is True
+
+
+def test_prefix_management(db: GraphDB):
+    """Test add_prefix, remove_prefix, and get_prefixes functionality"""
+
+    # Get initial prefixes (should include default prefixes: owl, rdf, rdfs, onto)
+    initial_prefixes = db.get_prefixes()
+    assert isinstance(initial_prefixes, dict)
+    assert "owl" in initial_prefixes
+    assert "rdf" in initial_prefixes
+    assert "rdfs" in initial_prefixes
+    assert "onto" in initial_prefixes
+    initial_count = len(initial_prefixes)
+
+    # Test add_prefix with full IRI
+    db.add_prefix("ex", "<http://example.org/>")
+    prefixes = db.get_prefixes()
+    assert "ex" in prefixes
+    assert prefixes["ex"] == "<http://example.org/>"
+    assert len(prefixes) == initial_count + 1
+
+    # Test add_prefix with IRI without angle brackets (should add them)
+    db.add_prefix("test", "http://test.org/")
+    prefixes = db.get_prefixes()
+    assert "test" in prefixes
+    assert prefixes["test"] == "<http://test.org/>"
+    assert len(prefixes) == initial_count + 2
+
+    # Test overwriting an existing prefix
+    db.add_prefix("ex", "<http://example.com/>")
+    prefixes = db.get_prefixes()
+    assert prefixes["ex"] == "<http://example.com/>"
+    assert len(prefixes) == initial_count + 2  # Count shouldn't increase
+
+    # Test remove_prefix for existing prefix
+    result = db.remove_prefix("ex")
+    assert result is True
+    prefixes = db.get_prefixes()
+    assert "ex" not in prefixes
+    assert len(prefixes) == initial_count + 1
+
+    # Test remove_prefix for non-existing prefix
+    result = db.remove_prefix("nonexistent")
+    assert result is False
+
+    # Test remove_prefix for another existing prefix
+    result = db.remove_prefix("test")
+    assert result is True
+    prefixes = db.get_prefixes()
+    assert "test" not in prefixes
+    assert len(prefixes) == initial_count
+
+    # Verify default prefixes are still intact
+    assert "owl" in prefixes
+    assert "rdf" in prefixes
+    assert "rdfs" in prefixes
+    assert "onto" in prefixes
