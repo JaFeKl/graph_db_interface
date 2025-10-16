@@ -6,7 +6,7 @@ build-backend = "poetry.core.masonry.api"
 name = "graph-db-interface"
 version = "0.5.0"
 description = "A simple interface to interact with a GraphDB instance"
-authors = ["Jan-Felix Klein <janfelixklein@ooglemail.com>", "Nico Brandt <nico.g.brandt@gmail.com>"]
+authors = ["Jan-Felix Klein <janfelixklein@ooglemail.com>", "Nico Brandt <nico.g.brandt@gmail.com>", "Sören Weindel <soeren.weindel@kit.edu>", "Etienne Hoffmann <etienne.hoffmann@kit.edu>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
