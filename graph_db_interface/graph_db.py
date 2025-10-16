@@ -11,6 +11,7 @@ from graph_db_interface.exceptions import (
 
 from . import LOGGER
 
+
 class GraphDB:
     """A GraphDB interface that abstracts SPARQL queries and provides a small set of commonly needed queries."""
 
@@ -51,10 +52,29 @@ class GraphDB:
             f"Using GraphDB repository '{self.repository}' as user '{self._username}'."
         )
 
-    from .queries.named_graph import get_list_of_named_graphs, named_graph_add, named_graph_delete
-    from .queries.triple_single import triple_exists, triple_add, triple_delete, triple_update
-    from .queries.triple_multi import triples_get, triples_add, triples_delete, triples_update
-    from .queries.ontology_helpers import iri_exists, is_subclass, owl_is_named_individual, owl_get_classes_of_individual
+    from graph_db_interface.queries.named_graph import (
+        get_list_of_named_graphs,
+        named_graph_add,
+        named_graph_delete,
+    )
+    from graph_db_interface.queries.triple_single import (
+        triple_exists,
+        triple_add,
+        triple_delete,
+        triple_update,
+    )
+    from graph_db_interface.queries.triple_multi import (
+        triples_get,
+        triples_add,
+        triples_delete,
+        triples_update,
+    )
+    from graph_db_interface.queries.ontology_helpers import (
+        iri_exists,
+        is_subclass,
+        owl_is_named_individual,
+        owl_get_classes_of_individual,
+    )
 
     @property
     def repository(self):
