@@ -313,8 +313,7 @@ class GraphDB:
             " Please make sure, that your provided credentials are valid."
         )
 
-    def _add_prefix(self, prefix: str, iri: str):
-        self._prefixes[prefix] = utils.ensure_absolute(iri)
+
 
     def _get_prefix_string(self) -> str:
         return (
@@ -329,6 +328,19 @@ class GraphDB:
             return f"GRAPH {named_graph}"
 
         return ""
+
+
+    def add_prefix(self, prefix: str, iri: str):
+        self._prefixes[prefix] = utils.ensure_absolute(iri)
+
+    def remove_prefix(self, prefix: str) -> bool:
+        if prefix in self._prefixes:
+            del self._prefixes[prefix]
+            return True
+        return False
+    
+    def get_prefixes(self) -> Dict[str, str]:
+        return self._prefixes
 
     def query(
         self,
