@@ -54,9 +54,13 @@ class GraphDB:
 
     from graph_db_interface.queries.named_graph import (
         get_list_of_named_graphs,
-        named_graph_add,
-        named_graph_delete,
     )
+    from graph_db_interface.queries.rdf4j.graph_store import (
+        fetch_statements,
+        import_statements,
+        clear_graph,
+    )
+
     from graph_db_interface.queries.triple_single import (
         triple_exists,
         triple_add,
