@@ -1,16 +1,19 @@
 # To be imported into ..graph_db.py GraphDB class
 
-from typing import Union, Any, Optional
+from typing import Union, Any, Optional, TYPE_CHECKING
 from rdflib import Literal
 from graph_db_interface.utils import utils
 from graph_db_interface.exceptions import InvalidInputError
 
-from ..sparql_query import SPARQLQuery
-from .. import LOGGER
+from graph_db_interface.sparql_query import SPARQLQuery
+from graph_db_interface import LOGGER
+
+if TYPE_CHECKING:
+    from graph_db_interface import GraphDB
 
 
 def triple_exists(
-    self,
+    self: "GraphDB",
     sub: str,
     pred: str,
     obj: Union[str, Literal],
@@ -52,7 +55,7 @@ def triple_exists(
 
 
 def triple_add(
-    self,
+    self: "GraphDB",
     sub: str,
     pred: str,
     obj: Any,
@@ -108,7 +111,7 @@ def triple_add(
 
 
 def triple_delete(
-    self,
+    self: "GraphDB",
     sub: str,
     pred: str,
     obj: Union[str, Literal],
@@ -157,7 +160,7 @@ def triple_delete(
 
 
 def triple_update(
-    self,
+    self: "GraphDB",
     sub_old: str,
     pred_old: str,
     obj_old: Union[str, Literal],

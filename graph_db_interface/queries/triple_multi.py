@@ -1,17 +1,19 @@
 # To be imported into ..graph_db.py GraphDB class
 
-from typing import List, Union, Any, Optional, Tuple
+from typing import List, Union, Any, Optional, Tuple, TYPE_CHECKING
 from rdflib import Literal
 from graph_db_interface.utils import utils
-from graph_db_interface.exceptions import (
-    InvalidInputError
-)
+from graph_db_interface.exceptions import InvalidInputError
 
-from ..sparql_query import SPARQLQuery
-from .. import LOGGER
+from graph_db_interface.sparql_query import SPARQLQuery
+from graph_db_interface import LOGGER
+
+if TYPE_CHECKING:
+    from graph_db_interface import GraphDB
+
 
 def triples_get(
-    self,
+    self: "GraphDB",
     sub: Optional[str] = None,
     pred: Optional[str] = None,
     obj: Optional[Any] = None,
@@ -94,6 +96,7 @@ def triples_get(
     ]
     return converted_results
 
+
 def triples_add(
     self,
     triples_to_add: List[Tuple[str, str, Any]],
@@ -163,7 +166,7 @@ def triples_add(
     query_string = query.to_string()
     if query_string is None:
         return False
-    
+
     if named_graph:
         old_named_graph = self._named_graph
         self.set_named_graph(named_graph)
@@ -172,11 +175,12 @@ def triples_add(
     if not result:
         LOGGER.warning(f"Failed to add triples: {prepared_triples}")
         return False
-    
+
     if named_graph:
         self.set_named_graph(old_named_graph)
 
     return result
+
 
 def triples_delete(
     self,
@@ -230,6 +234,7 @@ def triples_delete(
 
     return result
 
+
 def triples_update(
     self,
     old_triples: List[Tuple[str, str, Union[str, Literal]]],
@@ -251,9 +256,7 @@ def triples_update(
         raise InvalidInputError("Old and new triples lists must not be empty.")
 
     if len(old_triples) != len(new_triples):
-        raise InvalidInputError(
-            "Old and new triples lists must have the same length."
-        )
+        raise InvalidInputError("Old and new triples lists must have the same length.")
 
     delete_triples = []
     insert_triples = []
@@ -267,9 +270,7 @@ def triples_update(
         sub_old, pred_old, obj_old = triple
         if check_exist:
             if not self.triple_exists(sub_old, pred_old, obj_old):
-                LOGGER.warning(
-                    f"Triple does not exist: {sub_old} {pred_old} {obj_old}"
-                )
+                LOGGER.warning(f"Triple does not exist: {sub_old} {pred_old} {obj_old}")
                 return False
 
         sub_old = utils.prepare_subject(sub_old, ensure_iri=True)
@@ -317,4 +318,3 @@ def triples_update(
             f" {self._repository}"
         )
     return result
-

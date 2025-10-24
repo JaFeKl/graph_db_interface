@@ -1,16 +1,18 @@
 # To be imported into ..graph_db.py GraphDB class
 
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 from graph_db_interface.utils import utils
-from graph_db_interface.exceptions import (
-    InvalidInputError
-)
+from graph_db_interface.exceptions import InvalidInputError
 
-from ..sparql_query import SPARQLQuery
-from .. import LOGGER
+from graph_db_interface.sparql_query import SPARQLQuery
+from graph_db_interface import LOGGER
+
+if TYPE_CHECKING:
+    from graph_db_interface import GraphDB
+
 
 def iri_exists(
-    self,
+    self: "GraphDB",
     iri: str,
     as_sub: bool = False,
     as_pred: bool = False,
@@ -78,7 +80,8 @@ def iri_exists(
     LOGGER.debug(f"Unable to find IRI {iri}")
     return False
 
-def is_subclass(self, subclass_iri: str, class_iri: str) -> bool:
+
+def is_subclass(self: "GraphDB", subclass_iri: str, class_iri: str) -> bool:
     """
     Determines whether a given class (subclass_iri) is a subclass of another class (class_iri)
     based on the "rdfs:subClassOf" relationship.
@@ -92,7 +95,8 @@ def is_subclass(self, subclass_iri: str, class_iri: str) -> bool:
     """
     return self.triple_exists(subclass_iri, "rdfs:subClassOf", class_iri)
 
-def owl_is_named_individual(self, iri: str) -> bool:
+
+def owl_is_named_individual(self: "GraphDB", iri: str) -> bool:
     """
     Checks if the given IRI corresponds to an OWL named individual.
 
@@ -112,8 +116,9 @@ def owl_is_named_individual(self, iri: str) -> bool:
         return False
     return True
 
+
 def owl_get_classes_of_individual(
-    self,
+    self: "GraphDB",
     instance_iri: str,
     ignored_prefixes: Optional[List[str]] = None,
     local_name: bool = False,
@@ -188,9 +193,7 @@ def owl_get_classes_of_individual(
     if results is None:
         return []
 
-    classes = [
-        result["class"]["value"] for result in results["results"]["bindings"]
-    ]
+    classes = [result["class"]["value"] for result in results["results"]["bindings"]]
     if local_name is True:
         classes = [utils.get_local_name(iri) for iri in classes]
     return classes
