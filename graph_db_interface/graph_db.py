@@ -4,7 +4,7 @@ import requests
 import os
 from requests import Response
 from graph_db_interface.utils import utils
-from graph_db_interface.utils.db_credentials import GraphDBCredentials
+from graph_db_interface.utils.graph_db_credentials import GraphDBCredentials
 from graph_db_interface.exceptions import (
     InvalidRepositoryError,
     AuthenticationError,
