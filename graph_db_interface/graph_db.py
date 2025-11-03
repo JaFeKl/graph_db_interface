@@ -1,8 +1,10 @@
 from base64 import b64encode
 from typing import List, Union, Optional, Dict
 import requests
+import os
 from requests import Response
 from graph_db_interface.utils import utils
+from graph_db_interface.utils.graph_db_credentials import GraphDBCredentials
 from graph_db_interface.exceptions import (
     InvalidRepositoryError,
     AuthenticationError,
@@ -17,17 +19,14 @@ class GraphDB:
 
     def __init__(
         self,
-        base_url: str,
-        username: str,
-        password: str,
-        repository: str,
+        credentials: GraphDBCredentials,
         timeout: int = 60,
         use_gdb_token: bool = True,
         named_graph: Optional[str] = None,
     ):
-        self._base_url = base_url
-        self._username = username
-        self._password = password
+        self._base_url = credentials.base_url
+        self._username = credentials.username
+        self._password = credentials.password
         self._timeout = timeout
         self._auth = None
 
@@ -38,7 +37,8 @@ class GraphDB:
             self._auth = f"Basic {b64encode(token).decode()}"
 
         self._repositories = self.get_list_of_repositories(only_ids=True)
-        self.repository = repository
+
+        self.repository = credentials.repository
 
         self._prefixes = {}
         self.add_prefix("owl", "<http://www.w3.org/2002/07/owl#>")
@@ -51,6 +51,10 @@ class GraphDB:
         LOGGER.info(
             f"Using GraphDB repository '{self.repository}' as user '{self._username}'."
         )
+
+    @classmethod
+    def from_env(cls):
+        return cls(*GraphDBCredentials.from_env())
 
     from graph_db_interface.queries.named_graph import (
         get_list_of_named_graphs,
@@ -241,6 +245,5 @@ class GraphDB:
             raise GraphDbException(
                 f"Error while querying GraphDB ({status_code}) - {response.text}"
             )
-            return False if update else None
 
         return True if update else response.json()
