@@ -54,7 +54,7 @@ class GraphDB:
 
     @classmethod
     def from_env(cls):
-        return cls(*GraphDBCredentials.from_env())
+        return cls(GraphDBCredentials.from_env())
 
     from graph_db_interface.queries.named_graph import (
         get_list_of_named_graphs,
