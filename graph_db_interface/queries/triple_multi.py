@@ -169,7 +169,7 @@ def triples_add(
 
     if named_graph:
         old_named_graph = self._named_graph
-        self.set_named_graph(named_graph)
+        self.named_graph = named_graph
 
     result = self.query(query=query_string, update=True)
     if not result:
@@ -177,7 +177,7 @@ def triples_add(
         return False
 
     if named_graph:
-        self.set_named_graph(old_named_graph)
+        self.named_graph = named_graph
 
     return result
 
