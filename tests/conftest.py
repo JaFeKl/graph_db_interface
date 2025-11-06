@@ -10,7 +10,7 @@ def db() -> GraphDB:
     """Fixture to create a GraphDB client."""
     for env_var in [
         "GRAPHDB_URL",
-        "GRAPHDB_USER",
+        "GRAPHDB_USERNAME",
         "GRAPHDB_PASSWORD",
         "GRAPHDB_REPOSITORY",
     ]:
@@ -20,7 +20,7 @@ def db() -> GraphDB:
 
     return GraphDB(
         base_url=os.getenv("GRAPHDB_URL"),
-        username=os.getenv("GRAPHDB_USER"),
+        username=os.getenv("GRAPHDB_USERNAME"),
         password=os.getenv("GRAPHDB_PASSWORD"),
         repository=os.getenv("GRAPHDB_REPOSITORY"),
     )
