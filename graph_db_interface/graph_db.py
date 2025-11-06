@@ -1,6 +1,8 @@
 from base64 import b64encode
 from typing import List, Union, Optional, Dict
+from graph_db_interface.kafka.kafka_manager import KafkaManager
 import requests
+import logging
 import os
 from requests import Response
 from graph_db_interface.utils import utils
@@ -10,8 +12,6 @@ from graph_db_interface.exceptions import (
     AuthenticationError,
     GraphDbException,
 )
-
-from . import LOGGER
 
 
 class GraphDB:
@@ -26,7 +26,12 @@ class GraphDB:
         timeout: int = 60,
         use_gdb_token: bool = True,
         named_graph: Optional[str] = None,
+        logger: Optional[logging.Logger] = None,
     ):
+        if logger is None:
+            self.logger = logging.getLogger(self.__class__.__name__)
+        else:
+            self.logger = logger
         self._base_url = base_url
         self._username = username
         self._password = password
@@ -49,14 +54,15 @@ class GraphDB:
         self.add_prefix("onto", "<http://www.ontotext.com/>")
 
         self.named_graph = named_graph
+        self.kafka_manager = KafkaManager(db=self)
 
-        LOGGER.info(
+        self.logger.info(
             f"Using GraphDB repository '{self.repository}' as user '{self._username}'."
         )
 
     @classmethod
-    def from_env(cls):
-        return cls(*GraphDBCredentials.from_env())
+    def from_env(cls, logger: Optional[logging.Logger] = None) -> "GraphDB":
+        return cls(*GraphDBCredentials.from_env(), logger=logger)
 
     from graph_db_interface.queries.named_graph import (
         get_list_of_named_graphs,
@@ -104,7 +110,7 @@ class GraphDB:
     def named_graph(self, value: Optional[str]):
         if value is not None:
             if utils.strip_angle_brackets(value) not in self.get_list_of_named_graphs():
-                LOGGER.warning(
+                self.logger.warning(
                     f"Passed named graph {value} does not exist in the repository."
                 )
             self._named_graph = utils.ensure_absolute(value)
@@ -127,7 +133,7 @@ class GraphDB:
                 return [repo["id"] for repo in repositories]
             return repositories
 
-        LOGGER.warning(
+        self.logger.warning(
             f"Failed to list repositories: {response.status_code}: {response.text}"
         )
         return None
@@ -176,7 +182,7 @@ class GraphDB:
         if response.status_code == 200:
             return response.headers.get("Authorization")
 
-        LOGGER.error(
+        self.logger.error(
             f"Failed to obtain gdb token: {response.status_code}: {response.text}"
         )
         raise AuthenticationError(
@@ -241,7 +247,7 @@ class GraphDB:
 
         if not response.ok:
             status_code = response.status_code
-            LOGGER.error(
+            self.logger.error(
                 f"Error while querying GraphDB ({status_code}) - {response.text}"
             )
             raise GraphDbException(

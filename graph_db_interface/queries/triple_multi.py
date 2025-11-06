@@ -6,7 +6,6 @@ from graph_db_interface.utils import utils
 from graph_db_interface.exceptions import InvalidInputError
 
 from graph_db_interface.sparql_query import SPARQLQuery
-from graph_db_interface import LOGGER
 
 if TYPE_CHECKING:
     from graph_db_interface import GraphDB
@@ -80,7 +79,7 @@ def triples_get(
     )
     query_string = query.to_string(validate=True)
     if query_string is None:
-        LOGGER.error(
+        self.logger.error(
             "Unable to construct SPARQL query, returning empty list of triples"
         )
         return []
@@ -143,7 +142,7 @@ def triples_add(
             return False
         ask_result = self.query(query=ask_query_string, update=False)
         if ask_result is not None and ask_result["boolean"]:
-            LOGGER.warning("One of the triples to add already exists in the graph.")
+            self.logger.warning("One of the triples to add already exists in the graph.")
             return False
 
     query = SPARQLQuery(
@@ -173,7 +172,7 @@ def triples_add(
 
     result = self.query(query=query_string, update=True)
     if not result:
-        LOGGER.warning(f"Failed to add triples: {prepared_triples}")
+        self.logger.warning(f"Failed to add triples: {prepared_triples}")
         return False
 
     if named_graph:
@@ -210,7 +209,7 @@ def triples_delete(
         if check_exist:
 
             if not self.triple_exists(sub, pred, obj):
-                LOGGER.warning(
+                self.logger.warning(
                     f"Triple does not exist and cannot be deleted: {sub} {pred} {obj}"
                 )
                 return False
@@ -228,9 +227,9 @@ def triples_delete(
 
     result = self.query(query=query.to_string(), update=True)
     if result:
-        LOGGER.debug(f"Successfully deleted triples: {prepared_triples}")
+        self.logger.debug(f"Successfully deleted triples: {prepared_triples}")
     else:
-        LOGGER.warning(f"Failed to delete triples: {prepared_triples}")
+        self.logger.warning(f"Failed to delete triples: {prepared_triples}")
 
     return result
 
@@ -270,7 +269,7 @@ def triples_update(
         sub_old, pred_old, obj_old = triple
         if check_exist:
             if not self.triple_exists(sub_old, pred_old, obj_old):
-                LOGGER.warning(f"Triple does not exist: {sub_old} {pred_old} {obj_old}")
+                self.logger.warning(f"Triple does not exist: {sub_old} {pred_old} {obj_old}")
                 return False
 
         sub_old = utils.prepare_subject(sub_old, ensure_iri=True)
@@ -308,12 +307,12 @@ def triples_update(
         return False
     result = self.query(query=query_string, update=True)
     if result:
-        LOGGER.debug(
+        self.logger.debug(
             f"Successfully updated triples {old_triples} -> {new_triples}, named_graph: {self._named_graph}, repository:"
             f" {self._repository}"
         )
     else:
-        LOGGER.warning(
+        self.logger.warning(
             f"Failed to update triples {old_triples} -> {new_triples}, named_graph: {self._named_graph}, repository:"
             f" {self._repository}"
         )

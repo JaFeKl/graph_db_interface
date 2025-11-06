@@ -1,6 +1,5 @@
 from requests import Response
 from typing import TYPE_CHECKING, Optional, Tuple
-from graph_db_interface import LOGGER
 from rdflib import Graph
 
 if TYPE_CHECKING:
@@ -29,18 +28,18 @@ def fetch_statements(
     )
     if response.status_code == 200:
         if not default_graph:
-            LOGGER.debug(f"Named graph {graph_uri} fetched successfully!")
+            self.logger.debug(f"Named graph {graph_uri} fetched successfully!")
         else:
-            LOGGER.debug("Default graph fetched successfully!")
+            self.logger.debug("Default graph fetched successfully!")
         g.parse(data=response.text, format="nt")
     else:
         if not default_graph:
-            LOGGER.warning(
+            self.logger.warning(
                 f"Failed to fetch named graph: {response.status_code} -"
                 f" {response.text}"
             )
         else:
-            LOGGER.warning(
+            self.logger.warning(
                 f"Failed to fetch default graph: {response.status_code} -"
                 f" {response.text}"
             )
@@ -71,19 +70,19 @@ def import_statements(
     )
     if response.status_code == 204:
         if not default_graph:
-            LOGGER.debug(
+            self.logger.debug(
                 f"Statements imported to named graph {graph_uri} successfully!"
             )
         else:
-            LOGGER.debug("Statements imported to default graph successfully!")
+            self.logger.debug("Statements imported to default graph successfully!")
     else:
         if not default_graph:
-            LOGGER.warning(
+            self.logger.warning(
                 f"Failed to import statements to named graph: {response.status_code} -"
                 f" {response.text}"
             )
         else:
-            LOGGER.warning(
+            self.logger.warning(
                 f"Failed to import statements to default graph: {response.status_code} -"
                 f" {response.text}"
             )
@@ -108,16 +107,16 @@ def clear_graph(self: "GraphDB", graph_uri: Optional[str] = None):
 
     if response.status_code == 204:
         if not default_graph:
-            LOGGER.debug(f"Named graph {graph_uri} cleared successfully!")
+            self.logger.debug(f"Named graph {graph_uri} cleared successfully!")
         else:
-            LOGGER.debug(f"Default graph cleared successfully!")
+            self.logger.debug(f"Default graph cleared successfully!")
     else:
         if not default_graph:
-            LOGGER.warning(
+            self.logger.warning(
                 f"Failed to clear named graph: {response.status_code} - {response.text}"
             )
         else:
-            LOGGER.warning(
+            self.logger.warning(
                 f"Failed to clear default graph: {response.status_code} - {response.text}"
             )
     return response
