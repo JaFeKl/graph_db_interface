@@ -1,8 +1,11 @@
 from typing import Optional, Any, Hashable
 
-from .. import LOGGER
 
-def process_bindings_select(bindings: list[dict[str, dict[str, Any]]], variables: Optional[list[str]] = None, grouping_variables: Optional[list[str]] = None) -> tuple[tuple[Any, ...], ...] | tuple[Any, ...] | dict:
+def process_bindings_select(
+    bindings: list[dict[str, dict[str, Any]]],
+    variables: Optional[list[str]] = None,
+    grouping_variables: Optional[list[str]] = None,
+) -> tuple[tuple[Any, ...], ...] | tuple[Any, ...] | dict:
     """Process SPARQL bindings from a SELECT query into tuples or a nested dictionary structure.
 
     This helper takes the raw SPARQL JSON bindings (``results.bindings``) and
@@ -74,23 +77,29 @@ def process_bindings_select(bindings: list[dict[str, dict[str, Any]]], variables
     """
 
     if not variables and not grouping_variables:
-        assert bindings, TypeError("Cannot determine result structure without variables or grouping_variables for empty bindings.")
+        assert bindings, TypeError(
+            "Cannot determine result structure without variables or grouping_variables for empty bindings."
+        )
         variables = list(bindings[0].keys())
-        LOGGER.warning(f"Inferring variables {variables} from bindings. For predictable results, please provide variables explicitly.")
+        # LOGGER.warning(f"Inferring variables {variables} from bindings. For predictable results, please provide variables explicitly.")
 
     if not variables:
         extract_entry = lambda binding: None
     elif len(variables) == 1:
         extract_entry = lambda binding: binding[variables[0]]["value"]
     else:
-        extract_entry = lambda binding: tuple(binding[variable]["value"] for variable in variables)
+        extract_entry = lambda binding: tuple(
+            binding[variable]["value"] for variable in variables
+        )
 
     if not grouping_variables:
         return tuple(extract_entry(binding) for binding in bindings)
 
-    else: # Process with grouping variables
-        assert all(isinstance(bindings[0][key]["value"], Hashable) for key in grouping_variables),\
-            TypeError("All datatypes in grouping_variables must be hashable.")
+    else:  # Process with grouping variables
+        assert all(
+            isinstance(bindings[0][key]["value"], Hashable)
+            for key in grouping_variables
+        ), TypeError("All datatypes in grouping_variables must be hashable.")
 
         result = {}
         leaf_dicts = []

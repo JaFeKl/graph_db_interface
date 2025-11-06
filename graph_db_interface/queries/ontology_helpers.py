@@ -5,7 +5,6 @@ from graph_db_interface.utils import utils
 from graph_db_interface.exceptions import InvalidInputError
 
 from graph_db_interface.sparql_query import SPARQLQuery
-from graph_db_interface import LOGGER
 
 if TYPE_CHECKING:
     from graph_db_interface import GraphDB
@@ -74,10 +73,10 @@ def iri_exists(
         update=False,
     )
     if result is not None and result["boolean"]:
-        LOGGER.debug(f"Found IRI {iri}")
+        self.logger.debug(f"Found IRI {iri}")
         return True
 
-    LOGGER.debug(f"Unable to find IRI {iri}")
+    self.logger.debug(f"Unable to find IRI {iri}")
     return False
 
 
@@ -112,7 +111,7 @@ def owl_is_named_individual(self: "GraphDB", iri: str) -> bool:
         bool: True if the IRI is a named individual, False otherwise.
     """
     if not self.triple_exists(iri, "rdf:type", "owl:NamedIndividual"):
-        LOGGER.debug(f"IRI {iri} is not a named individual!")
+        self.logger.debug(f"IRI {iri} is not a named individual!")
         return False
     return True
 

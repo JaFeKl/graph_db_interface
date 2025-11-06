@@ -6,7 +6,6 @@ from graph_db_interface.utils import utils
 from graph_db_interface.exceptions import InvalidInputError
 
 from graph_db_interface.sparql_query import SPARQLQuery
-from graph_db_interface import LOGGER
 
 if TYPE_CHECKING:
     from graph_db_interface import GraphDB
@@ -44,10 +43,10 @@ def triple_exists(
 
     result = self.query(query=query_string)
     if result is not None and result["boolean"]:
-        LOGGER.debug(f"Found triple {sub}, {pred}, {obj}")
+        self.logger.debug(f"Found triple {sub}, {pred}, {obj}")
         return True
 
-    LOGGER.debug(
+    self.logger.debug(
         f"Unable to find triple {sub}, {pred}, {obj}, named_graph:"
         f" {self._named_graph}, repository: {self._repository}"
     )
@@ -100,7 +99,7 @@ def triple_add(
         self.set_named_graph(named_graph)
     result = self.query(query=query_string, update=True)
     if result:
-        LOGGER.debug(
+        self.logger.debug(
             f"New triple inserted: {sub}, {pred}, {obj} named_graph:"
             f" {self._named_graph}, repository: {self._repository}"
         )
@@ -135,7 +134,7 @@ def triple_delete(
 
     if check_exist:
         if not self.triple_exists(sub, pred, obj):
-            LOGGER.warning("Unable to delete triple since it does not exist")
+            self.logger.warning("Unable to delete triple since it does not exist")
             return False
     query = SPARQLQuery(
         named_graph=self._named_graph,
@@ -152,9 +151,9 @@ def triple_delete(
     # Execute the SPARQL query
     result = self.query(query=query_string, update=True)
     if result:
-        LOGGER.debug(f"Successfully deleted triple: {sub} {pred} {obj}")
+        self.logger.debug(f"Successfully deleted triple: {sub} {pred} {obj}")
     else:
-        LOGGER.warning(f"Failed to delete triple: {sub} {pred} {obj}")
+        self.logger.warning(f"Failed to delete triple: {sub} {pred} {obj}")
 
     return result
 
@@ -222,7 +221,7 @@ def triple_update(
             pred_old,
             obj_old,
         ):
-            LOGGER.warning(f"Triple does not exist: {sub_old} {pred_old} {obj_old}")
+            self.logger.warning(f"Triple does not exist: {sub_old} {pred_old} {obj_old}")
             return False
 
     if sub_new is not None:
@@ -253,13 +252,13 @@ def triple_update(
     result = self.query(query=query_string, update=True)
 
     if result:
-        LOGGER.debug(
+        self.logger.debug(
             f"Successfully updated triple to: {update_sub} {update_pred}"
             f" {update_obj}, named_graph: {self._named_graph}, repository:"
             f" {self._repository}"
         )
     else:
-        LOGGER.warning(
+        self.logger.warning(
             f"Failed to update triple to: {update_sub} {update_pred}"
             f" {update_obj}, named_graph: {self._named_graph}, repository:"
             f" {self._repository}"
