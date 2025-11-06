@@ -19,10 +19,7 @@ class GraphDB:
 
     def __init__(
         self,
-        base_url: str,
-        username: str,
-        password: str,
-        repository: str,
+        credentials: GraphDBCredentials,
         timeout: int = 60,
         use_gdb_token: bool = True,
         named_graph: Optional[str] = None,
@@ -45,7 +42,8 @@ class GraphDB:
             self._auth = f"Basic {b64encode(token).decode()}"
 
         self._repositories = self.get_list_of_repositories(only_ids=True)
-        self.repository = repository
+
+        self.repository = credentials.repository
 
         self._prefixes = {}
         self.add_prefix("owl", "<http://www.w3.org/2002/07/owl#>")
@@ -253,6 +251,5 @@ class GraphDB:
             raise GraphDbException(
                 f"Error while querying GraphDB ({status_code}) - {response.text}"
             )
-            return False if update else None
 
         return True if update else response.json()
