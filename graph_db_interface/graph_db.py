@@ -29,16 +29,18 @@ class GraphDB:
             self.logger = logging.getLogger(self.__class__.__name__)
         else:
             self.logger = logger
-        self._base_url = base_url
-        self._username = username
-        self._password = password
+        self._credentials = credentials
         self._timeout = timeout
         self._auth = None
 
         if use_gdb_token:
-            self._auth = self._get_authentication_token(self._username, self._password)
+            self._auth = self._get_authentication_token(
+                self._credentials.username, self._credentials.password
+            )
         else:
-            token = bytes(f"{self._username}:{self._password}", "utf-8")
+            token = bytes(
+                f"{self._credentials.username}:{self._credentials.password}", "utf-8"
+            )
             self._auth = f"Basic {b64encode(token).decode()}"
 
         self._repositories = self.get_list_of_repositories(only_ids=True)
@@ -55,12 +57,12 @@ class GraphDB:
         self.kafka_manager = KafkaManager(db=self)
 
         self.logger.info(
-            f"Using GraphDB repository '{self.repository}' as user '{self._username}'."
+            f"Using GraphDB repository '{self.repository}' as user '{self._credentials.username}'."
         )
 
     @classmethod
     def from_env(cls, logger: Optional[logging.Logger] = None) -> "GraphDB":
-        return cls(*GraphDBCredentials.from_env(), logger=logger)
+        return cls(credentials=GraphDBCredentials.from_env(), logger=logger)
 
     from graph_db_interface.queries.named_graph import (
         get_list_of_named_graphs,
@@ -156,7 +158,10 @@ class GraphDB:
             headers["Authorization"] = self._auth
 
         return getattr(requests, method)(
-            f"{self._base_url}/{endpoint}", headers=headers, timeout=timeout, **kwargs
+            f"{self._credentials.base_url}/{endpoint}",
+            headers=headers,
+            timeout=timeout,
+            **kwargs,
         )
 
     def _get_authentication_token(self, username: str, password: str) -> str:

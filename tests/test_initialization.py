@@ -8,21 +8,24 @@ def test_credentials_valid(db: GraphDB):
     """Test successfull initialization"""
     try:
         credentials = GraphDBCredentials(
-            base_url=db._base_url,
-            username=db._username,
-            password=db._password,
-            repository=db._repository,
+            base_url=db._credentials.base_url,
+            username=db._credentials.username,
+            password=db._credentials.password,
+            repository=db._credentials.repository,
         )
         GraphDB(credentials=credentials)
     except Exception as e:
         pytest.fail(f"Unexpected error raised: {e}")
 
+
 def test_credentials_from_environment(db: GraphDB):
     """Test successfull initialization"""
-    if os.getenv("GRAPHDB_URL") is None \
-        or os.getenv("GRAPHDB_USERNAME") is None \
-        or os.getenv("GRAPHDB_PASSWORD") is None \
-        or os.getenv("GRAPHDB_REPOSITORY") is None:
+    if (
+        os.getenv("GRAPHDB_URL") is None
+        or os.getenv("GRAPHDB_USERNAME") is None
+        or os.getenv("GRAPHDB_PASSWORD") is None
+        or os.getenv("GRAPHDB_REPOSITORY") is None
+    ):
         pytest.skip("One or more environment variables are not set")
 
     try:
@@ -30,7 +33,7 @@ def test_credentials_from_environment(db: GraphDB):
         GraphDB(credentials=credentials)
     except Exception as e:
         pytest.fail(f"Unexpected error raised: {e}")
-        
+
     try:
         GraphDB.from_env()
     except Exception as e:
@@ -41,14 +44,12 @@ def test_credentials_from_class(db: GraphDB):
     """Test successfull initialization"""
     try:
         credentials = GraphDBCredentials(
-            base_url=db._base_url,
-            username=db._username,
-            password=db._password,
-            repository=db._repository
+            base_url=db._credentials.base_url,
+            username=db._credentials.username,
+            password=db._credentials.password,
+            repository=db._credentials.repository,
         )
-        GraphDB(
-            *credentials
-        )
+        GraphDB(credentials)
     except Exception as e:
         pytest.fail(f"Unexpected error raised: {e}")
 
@@ -57,10 +58,10 @@ def test_credentials_invalid(db: GraphDB):
     """Test invalid credentials used"""
 
     credentials = GraphDBCredentials(
-        base_url=db._base_url,
-        username=db._username,
+        base_url=db._credentials.base_url,
+        username=db._credentials.username,
         password="SomeWrongPassword",
-        repository=db._repository,
+        repository=db._credentials.repository,
     )
 
     with pytest.raises(AuthenticationError):
@@ -70,9 +71,9 @@ def test_credentials_invalid(db: GraphDB):
 def test_invalid_repository(db: GraphDB):
     """Test an invalid selected repository"""
     credentials = GraphDBCredentials(
-        base_url=db._base_url,
-        username=db._username,
-        password=db._password,
+        base_url=db._credentials.base_url,
+        username=db._credentials.username,
+        password=db._credentials.password,
         repository="SomeWrongRepository",
     )
 
