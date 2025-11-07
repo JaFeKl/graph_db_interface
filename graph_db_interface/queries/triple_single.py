@@ -221,7 +221,9 @@ def triple_update(
             pred_old,
             obj_old,
         ):
-            self.logger.warning(f"Triple does not exist: {sub_old} {pred_old} {obj_old}")
+            self.logger.warning(
+                f"Triple does not exist: {sub_old} {pred_old} {obj_old}"
+            )
             return False
 
     if sub_new is not None:

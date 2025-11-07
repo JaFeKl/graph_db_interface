@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import os
 
+
 @dataclass(frozen=True)
 class GraphDBCredentials:
     """
@@ -11,8 +12,9 @@ class GraphDBCredentials:
         username (str): The username for authenticating with the database.
         password (str): The password for authenticating with the database.
         database_name (str): The name of the specific database to connect to.
-        
+
     """
+
     base_url: str
     username: str
     password: str
@@ -20,7 +22,7 @@ class GraphDBCredentials:
 
     @classmethod
     def from_env(cls):
-        '''
+        """
         Create a GraphDB instance using environment variables. The following environment variables must be set:
         - `GRAPHDB_USERNAME`: The username for GraphDB authentication.
         - `GRAPHDB_PASSWORD`: The password for GraphDB authentication.
@@ -29,7 +31,7 @@ class GraphDBCredentials:
 
         Raises:
             ValueError: If any of the required environment variables are not set.
-        '''
+        """
 
         if os.getenv("GRAPHDB_USERNAME") is None:
             raise ValueError("GRAPHDB_USERNAME environment variable is not set.")
@@ -49,13 +51,15 @@ class GraphDBCredentials:
             base_url=base_url,
             username=username,
             password=password,
-            repository=repository
+            repository=repository,
         )
 
     def __iter__(self):
-        return iter((
-            self.base_url,
-            self.username,
-            self.password,
-            self.repository,
-        ))
+        return iter(
+            (
+                self.base_url,
+                self.username,
+                self.password,
+                self.repository,
+            )
+        )

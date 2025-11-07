@@ -2,6 +2,7 @@ from enum import Enum
 from typing import List, Optional, Dict, Tuple
 from graph_db_interface.utils import utils
 
+
 class SPARQLQueryType(Enum):
     """Enum for different SPARQL query types."""
 
@@ -15,6 +16,7 @@ class SPARQLQueryType(Enum):
     INSERT_EXISTS = "INSERT EXISTS"
     DELETE_DATA = "DELETE DATA"
     DELETE_INSERT = "DELETE/INSERT"
+
 
 class SPARQLQuery:
     def __init__(
@@ -103,7 +105,9 @@ WHERE {{ FILTER NOT EXISTS {{
 """
         )
         block = "\n".join(block_parts)
-        self._query_blocks.append({"type": SPARQLQueryType.INSERT_EXISTS, "data": block})
+        self._query_blocks.append(
+            {"type": SPARQLQueryType.INSERT_EXISTS, "data": block}
+        )
 
     def add_delete_data_block(
         self,
