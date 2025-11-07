@@ -28,11 +28,15 @@ The package uses a single class named `GraphDB`. To use the interface, simply ge
 ```python
 from graph_db_interface import GraphDB
 
-myDB = GraphDB(
+credentials = GraphDBCredentials(
     base_url=<your_graph_db_url>,
     username=<your_graph_db_user>
     password=<your_graph_db_password>
     repository=<your_selected_repository_id>
+)
+
+myDB = GraphDB(
+    credentials=credentials
 )
 ```
 

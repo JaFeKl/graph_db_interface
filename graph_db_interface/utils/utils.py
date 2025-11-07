@@ -19,7 +19,7 @@ def validate_query(query: str):
         prepareQuery(query)
         return True
     except Exception as e:
-        error_message = f"SPAQRQL query validation failed (update query): {e}"
+        error_message = f"SPAQRQL query validation failed: {e}"
         LOGGER.error(error_message)
         raise InvalidQueryError(error_message)
 
@@ -30,7 +30,7 @@ def validate_update_query(query: str):
         g.update(query)
         return True
     except Exception as e:
-        error_message = f"SPAQRQL query validation failed (update query): {e}"
+        error_message = f"SPAQRQL update query validation failed: {e}"
         LOGGER.error(error_message)
         raise InvalidQueryError(error_message)
 
@@ -103,7 +103,7 @@ def from_xsd_literal(value: str, datatype: str):
 def convert_query_result_to_python_type(result_binding: dict) -> Any:
     """Convert a SPARQL query result binding to its corresponding Python type."""
     type = result_binding.get("type")
-    if type == "literal":
+    if type == "literal" and "datatype" in result_binding:
         return from_xsd_literal(result_binding["value"], result_binding["datatype"])
     else:
         # If no datatype is provided, return the value as is

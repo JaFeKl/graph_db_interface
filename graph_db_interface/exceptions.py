@@ -42,3 +42,11 @@ class InvalidIRIError(GraphDBInterfaceError):
     def __init__(self, message: str):
         self.message = message
         super().__init__(self.message)
+        
+        
+class GraphDbException(GraphDBInterfaceError):
+    """Exception raised for general GraphDB errors."""
+    
+    def __init__(self, message: str):
+        self.message = message
+        super().__init__(self.message)

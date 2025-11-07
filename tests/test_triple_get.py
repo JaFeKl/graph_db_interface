@@ -49,7 +49,7 @@ def test_triple_set_subjects(db: GraphDB):
     assert result_triples == [(SUBJECT1, PREDICATE1, OBJECT1.toPython())]
 
     # shorthand IRI
-    db._add_prefix("ex", "http://example.org/")
+    db.add_prefix("ex", "http://example.org/")
     result_triples = db.triples_get(
         sub=f"ex:{utils.get_local_name(SUBJECT1)}", include_implicit=False
     )
@@ -74,7 +74,7 @@ def test_triple_set_predicates(db: GraphDB):
     assert result_triples == [(SUBJECT1, PREDICATE1, OBJECT1.toPython())]
 
     # shorthand IRI
-    db._add_prefix("ex", "http://example.org/")
+    db.add_prefix("ex", "http://example.org/")
     result_triples = db.triples_get(
         pred=f"ex:{utils.get_local_name(PREDICATE1)}", include_implicit=False
     )
@@ -101,7 +101,7 @@ def test_triple_set_objects(db: GraphDB):
     assert result_triples == [(SUBJECT2, PREDICATE2, OBJECT2)]
 
     # shorthand IRI
-    db._add_prefix("ex", "http://example.org/")
+    db.add_prefix("ex", "http://example.org/")
     result_triples = db.triples_get(
         obj=f"ex:{utils.get_local_name(OBJECT2)}", include_implicit=False
     )
@@ -118,8 +118,6 @@ def test_triple_set_objects(db: GraphDB):
         assert result_triples == [(SUBJECT1, PREDICATE1, OBJECT1.toPython())]
 
         # Object as a Python basic type
-        result_triples = db.triples_get(
-            obj=OBJECT1.toPython(), include_implicit=False
-        )
+        result_triples = db.triples_get(obj=OBJECT1.toPython(), include_implicit=False)
         assert result_triples == [(SUBJECT1, PREDICATE1, OBJECT1.toPython())]
     pass
