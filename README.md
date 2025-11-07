@@ -1,7 +1,7 @@
 # graph_db_interface
 
 [![PyPI version](https://badge.fury.io/py/graph-db-interface.svg)](https://badge.fury.io/py/graph-db-interface)
-![Python](https://img.shields.io/badge/python-%3E=3.9-blue)
+![Python](https://img.shields.io/badge/python-%3E=3.11-blue)
 ![License](https://img.shields.io/github/license/JaFeKl/graph_db_interface)
 
 
