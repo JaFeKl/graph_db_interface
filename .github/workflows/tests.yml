@@ -44,6 +44,9 @@ jobs:
         virtualenvs-create: true
         virtualenvs-in-project: true
 
+    - name: Update poetry lock file
+      run: poetry lock
+
     - name: Install dependencies
       run: poetry install --with dev
 
