@@ -99,9 +99,9 @@ jobs:
         EOF
 
         curl -X PUT \
-          -H "Content-Type: application/rdf+xml" \
+          -H "Content-Type: multipart/form-data" \
           -u admin:root \
-          --data-binary @repo-config.ttl \
-          http://localhost:7200/repositories/test-repo
+          -F "config=@repo-config.ttl" \
+          http://localhost:7200/rest/repositories
 
       
