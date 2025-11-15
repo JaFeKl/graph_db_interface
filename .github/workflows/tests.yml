@@ -13,7 +13,7 @@ jobs:
     
     services:
       graphdb:
-        image: ontotext/graphdb:latest
+        image: ontotext/graphdb:11.1.3
         ports:
           - 7200:7200
         options: >-
