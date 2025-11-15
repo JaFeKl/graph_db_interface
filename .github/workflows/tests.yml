@@ -1,0 +1,23 @@
+name: Run Tests
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+  workflow_dispatch:  # Enables manual triggering
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      graphdb:
+        image: ontotext/graphdb:latest
+        ports:
+          - 7200:7200
+        options: >-
+          --health-cmd "curl -f http://localhost:7200/rest/repositories || exit 1"
+          --health-interval 30s
+          --health-timeout 10s
+          --health-retries 5
