@@ -10,6 +10,12 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+
+    env:
+      GRAPHDB_URL: http://localhost:7200
+      GRAPHDB_REPOSITORY: test-repo
+      GRAPHDB_USERNAME: admin
+      GRAPHDB_PASSWORD: root
     
     services:
       graphdb:
@@ -52,19 +58,9 @@ jobs:
 
     - name: Create test repository
       run: |
-        curl -X POST \
+        curl -X PUT \
           -H "Content-Type: application/json" \
           -u admin:root \
-          -d '{
-            "id": "test-repo",
-            "title": "Test Repository",
-            "type": "graphdb",
-            "params": {
-              "ruleset": {
-                "value": "rdfs-plus"
-              }
-            }
-          }' \
-          http://localhost:7200/rest/repositories
+          http://localhost:7200/repositories/test-repo
 
       
