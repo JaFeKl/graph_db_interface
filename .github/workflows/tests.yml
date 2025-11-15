@@ -104,4 +104,8 @@ jobs:
           -F "config=@repo-config.ttl" \
           http://localhost:7200/rest/repositories
 
+    - name: Run tests
+      run: poetry run pytest tests/test_graph_management.py::test_get_repositories -v --tb=short
+
+
       
