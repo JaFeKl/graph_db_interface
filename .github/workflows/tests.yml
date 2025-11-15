@@ -59,7 +59,7 @@ jobs:
     - name: Create test repository
       run: |
         curl -X PUT \
-          -H "Content-Type: application/json" \
+          -H "Content-Type: application/rdf+xml" \
           -u admin:root \
           http://localhost:7200/repositories/test-repo
 
