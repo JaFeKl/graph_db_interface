@@ -98,7 +98,7 @@ jobs:
           ].
         EOF
 
-        curl -X PUT \
+        curl -X POST \
           -H "Content-Type: multipart/form-data" \
           -u admin:root \
           -F "config=@repo-config.ttl" \
