@@ -142,7 +142,9 @@ def triples_add(
             return False
         ask_result = self.query(query=ask_query_string, update=False)
         if ask_result is not None and ask_result["boolean"]:
-            self.logger.warning("One of the triples to add already exists in the graph.")
+            self.logger.warning(
+                "One of the triples to add already exists in the graph."
+            )
             return False
 
     query = SPARQLQuery(
@@ -269,7 +271,9 @@ def triples_update(
         sub_old, pred_old, obj_old = triple
         if check_exist:
             if not self.triple_exists(sub_old, pred_old, obj_old):
-                self.logger.warning(f"Triple does not exist: {sub_old} {pred_old} {obj_old}")
+                self.logger.warning(
+                    f"Triple does not exist: {sub_old} {pred_old} {obj_old}"
+                )
                 return False
 
         sub_old = utils.prepare_subject(sub_old, ensure_iri=True)
