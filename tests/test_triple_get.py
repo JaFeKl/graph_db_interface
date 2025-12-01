@@ -7,13 +7,13 @@ import pytest
 
 NAMED_GRAPH = "https://my_named_test_graph"
 
-SUBJECT1 = "http://example.org#subject1"
-PREDICATE1 = "http://example.org#predicate1"
-OBJECT1 = 0.5
+SUB_1 = "http://example.org#subject1"
+PRED_1 = "http://example.org#predicate1"
+OBJ_1 = 0.5
 
-SUBJECT2 = "http://example.org#subject2"
-PREDICATE2 = "http://example.org#predicate2"
-OBJECT2 = "http://example.org#object2"
+SUBJ_2 = "http://example.org#subject2"
+PRED_2 = "http://example.org#predicate2"
+OBJ_2 = "http://example.org#object2"
 
 
 @pytest.fixture(params=[None, NAMED_GRAPH], scope="module", autouse=True)
@@ -26,15 +26,15 @@ def setup(request, db: GraphDB):
 
     db.triples_add(
         [
-            (SUBJECT1, PREDICATE1, OBJECT1),
-            (SUBJECT2, PREDICATE2, OBJECT2),
+            (SUB_1, PRED_1, OBJ_1),
+            (SUBJ_2, PRED_2, OBJ_2),
         ]
     )
     yield
     db.triples_delete(
         [
-            (SUBJECT1, PREDICATE1, OBJECT1),
-            (SUBJECT2, PREDICATE2, OBJECT2),
+            (SUB_1, PRED_1, OBJ_1),
+            (SUBJ_2, PRED_2, OBJ_2),
         ]
     )
 
@@ -46,68 +46,68 @@ def test_wrong_input(db: GraphDB):
 
     # Both triple and explicit iri given
     with pytest.raises(InvalidInputError):
-        db.triples_get((SUBJECT1, PREDICATE1, OBJECT1), sub=SUBJECT1)
+        db.triples_get((SUB_1, PRED_1, OBJ_1), sub=SUB_1)
 
 
 def test_triple_set_subjects(db: GraphDB):
     # Unenclosed absolute IRI
-    result_triples = db.triples_get(sub=SUBJECT1, include_implicit=False)
-    result_triples_wrong = db.triples_get(sub=PREDICATE1, include_implicit=False)
-    assert result_triples == [(SUBJECT1, PREDICATE1, OBJECT1)]
+    result_triples = db.triples_get(sub=SUB_1, include_implicit=False)
+    result_triples_wrong = db.triples_get(sub=PRED_1, include_implicit=False)
+    assert result_triples == [(SUB_1, PRED_1, OBJ_1)]
     assert result_triples_wrong == []
 
     # enclosed absolute IRI
-    result_triples = db.triples_get(sub=SUBJECT1, include_implicit=False)
-    assert result_triples == [(SUBJECT1, PREDICATE1, OBJECT1)]
+    result_triples = db.triples_get(sub=SUB_1, include_implicit=False)
+    assert result_triples == [(SUB_1, PRED_1, OBJ_1)]
 
     # shorthand IRI
     IRI.add_prefix("ex", "http://example.org/")
     result_triples = db.triples_get(
-        sub=f"ex:{utils.get_local_name(SUBJECT1)}", include_implicit=False
+        sub=f"ex:{utils.get_local_name(SUB_1)}", include_implicit=False
     )
-    assert result_triples == [(SUBJECT1, PREDICATE1, OBJECT1)]
+    assert result_triples == [(SUB_1, PRED_1, OBJ_1)]
 
 
 def test_triple_set_predicates(db: GraphDB):
     # Unenclosed absolute IRI
-    result_triples = db.triples_get(pred=PREDICATE1, include_implicit=False)
-    assert result_triples == [(SUBJECT1, PREDICATE1, OBJECT1)]
+    result_triples = db.triples_get(pred=PRED_1, include_implicit=False)
+    assert result_triples == [(SUB_1, PRED_1, OBJ_1)]
 
     # enclosed absolute IRI
-    result_triples = db.triples_get(pred=f"<{PREDICATE1}>", include_implicit=False)
-    assert result_triples == [(SUBJECT1, PREDICATE1, OBJECT1)]
+    result_triples = db.triples_get(pred=f"<{PRED_1}>", include_implicit=False)
+    assert result_triples == [(SUB_1, PRED_1, OBJ_1)]
 
     # shorthand IRI
     IRI.add_prefix("ex", "http://example.org/")
     result_triples = db.triples_get(
-        pred=f"ex:{utils.get_local_name(PREDICATE1)}", include_implicit=False
+        pred=f"ex:{utils.get_local_name(PRED_1)}", include_implicit=False
     )
-    assert result_triples == [(SUBJECT1, PREDICATE1, OBJECT1)]
+    assert result_triples == [(SUB_1, PRED_1, OBJ_1)]
 
 
 def test_triple_set_objects(db: GraphDB):
     # Unenclosed absolute IRI
-    result_triples = db.triples_get(obj=OBJECT2, include_implicit=False)
-    assert result_triples == [(SUBJECT2, PREDICATE2, OBJECT2)]
+    result_triples = db.triples_get(obj=OBJ_2, include_implicit=False)
+    assert result_triples == [(SUBJ_2, PRED_2, OBJ_2)]
 
     # enclosed absolute IRI
-    result_triples = db.triples_get(obj=f"<{OBJECT2}>", include_implicit=False)
-    assert result_triples == [(SUBJECT2, PREDICATE2, OBJECT2)]
+    result_triples = db.triples_get(obj=f"<{OBJ_2}>", include_implicit=False)
+    assert result_triples == [(SUBJ_2, PRED_2, OBJ_2)]
 
     # shorthand IRI
     IRI.add_prefix("ex", "http://example.org/")
     result_triples = db.triples_get(
-        obj=f"ex:{utils.get_local_name(OBJECT2)}", include_implicit=False
+        obj=f"ex:{utils.get_local_name(OBJ_2)}", include_implicit=False
     )
-    assert result_triples == [(SUBJECT2, PREDICATE2, OBJECT2)]
+    assert result_triples == [(SUBJ_2, PRED_2, OBJ_2)]
 
     if db.named_graph is not None:
         # Object as a Python basic type
-        result_triples = db.triples_get(obj=OBJECT1, include_implicit=False)
-        assert result_triples == [(SUBJECT1, PREDICATE1, OBJECT1)]
+        result_triples = db.triples_get(obj=OBJ_1, include_implicit=False)
+        assert result_triples == [(SUB_1, PRED_1, OBJ_1)]
 
         # Object as a rdflib Literal
         result_triples = db.triples_get(
-            obj=Literal(OBJECT1, datatype=XSD.double), include_implicit=False
+            obj=Literal(OBJ_1, datatype=XSD.double), include_implicit=False
         )
-        assert result_triples == [(SUBJECT1, PREDICATE1, OBJECT1)]
+        assert result_triples == [(SUB_1, PRED_1, OBJ_1)]
