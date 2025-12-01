@@ -1,8 +1,10 @@
 # To be imported into ..graph_db.py GraphDB class
 
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, Optional, Union, TYPE_CHECKING
 from graph_db_interface.utils import utils
+from graph_db_interface.utils.iri import IRI
 from graph_db_interface.exceptions import InvalidInputError
+from rdflib import Namespace
 
 from graph_db_interface.sparql_query import SPARQLQuery
 
@@ -12,29 +14,29 @@ if TYPE_CHECKING:
 
 def iri_exists(
     self: "GraphDB",
-    iri: str,
-    as_sub: bool = False,
-    as_pred: bool = False,
-    as_obj: bool = False,
-    include_explicit: bool = True,
-    include_implicit: bool = True,
+    iri: Union[str, IRI],
+    as_sub: Optional[bool] = False,
+    as_pred: Optional[bool] = False,
+    as_obj: Optional[bool] = False,
+    include_explicit: Optional[bool] = True,
+    include_implicit: Optional[bool] = True,
 ) -> bool:
     """
-    Checks if a given IRI exists in the graph database as a subject, predicate, or object.
+    Check if an IRI exists as subject, predicate, or object.
 
     Args:
-        iri (str): The IRI to check for existence.
-        as_sub (bool, optional): If True, checks if the IRI exists as a subject. Defaults to False.
-        as_pred (bool, optional): If True, checks if the IRI exists as a predicate. Defaults to False.
-        as_obj (bool, optional): If True, checks if the IRI exists as an object. Defaults to False.
-        include_explicit (bool, optional): If True, includes explicitly defined triples in the query. Defaults to True.
-        include_implicit (bool, optional): If True, includes implicitly inferred triples in the query. Defaults to True.
+        iri (Union[str, IRI]): The IRI to check for existence.
+        as_sub (Optional[bool]): If True, check existence as subject. Defaults to False.
+        as_pred (Optional[bool]): If True, check existence as predicate. Defaults to False.
+        as_obj (Optional[bool]): If True, check existence as object. Defaults to False.
+        include_explicit (Optional[bool]): Include explicit triples (`FROM onto:explicit`). Defaults to True.
+        include_implicit (Optional[bool]): Include inferred triples (`FROM onto:implicit`). Defaults to True.
 
     Returns:
-        bool: True if the IRI exists in the graph database based on the specified criteria, False otherwise.
+        bool: True if the IRI exists based on the specified criteria, False otherwise.
 
     Raises:
-        InvalidInputError: If none of `as_sub`, `as_pred`, or `as_obj` is set to True.
+        InvalidInputError: If none of `as_sub`, `as_pred`, or `as_obj` is True.
     """
 
     # Check if either as_subject, as_predicate, or as_object is True
@@ -43,21 +45,18 @@ def iri_exists(
             "At least one of as_sub, as_pred, or as_obj must be True"
         )
 
+    iri = IRI(iri)
+
     # Define potential query parts
     where_clauses = []
     if as_sub:
-        sub = utils.prepare_subject(iri, ensure_iri=True)
-        where_clauses.append(f"{{{sub} ?p ?o . }}")
+        where_clauses.append(f"{{{iri.n3()} ?p ?o . }}")
     if as_pred:
-        pred = utils.prepare_predicate(iri, ensure_iri=True)
-        where_clauses.append(f"{{?s {pred} ?o . }}")
+        where_clauses.append(f"{{?s {iri.n3()} ?o . }}")
     if as_obj:
-        obj = utils.prepare_object(iri, as_string=True)
-        where_clauses.append(f"{{?s ?p {obj} . }}")
-
+        where_clauses.append(f"{{?s ?p {iri.n3()} . }}")
     query = SPARQLQuery(
-        named_graph=self._named_graph,
-        prefixes=self._prefixes,
+        named_graph=self.named_graph,
         include_explicit=include_explicit,
         include_implicit=include_implicit,
     )
@@ -80,77 +79,67 @@ def iri_exists(
     return False
 
 
-def is_subclass(self: "GraphDB", subclass_iri: str, class_iri: str) -> bool:
+def is_subclass(
+    self: "GraphDB",
+    subclass_iri: Union[str, IRI],
+    class_iri: Union[str, IRI],
+) -> bool:
     """
-    Determines whether a given class (subclass_iri) is a subclass of another class (class_iri)
-    based on the "rdfs:subClassOf" relationship.
+    Check whether one class is a subclass of another (`rdfs:subClassOf`).
+
+    Asks for `subclass_iri rdfs:subClassOf class_iri`
 
     Args:
-        subclass_iri (str): The IRI of the potential subclass.
-        class_iri (str): The IRI of the potential superclass.
+        subclass_iri (Union[str, IRI]): The IRI of the potential subclass.
+        class_iri (Union[str, IRI]): The IRI of the potential superclass.
 
     Returns:
-        bool: True if subclass_iri is a subclass of class_iri, False otherwise.
+        bool: True if `subclass_iri` is a subclass of `class_iri`, False otherwise.
     """
-    return self.triple_exists(subclass_iri, "rdfs:subClassOf", class_iri)
+    return self.triple_exists((subclass_iri, "rdfs:subClassOf", class_iri))
 
 
-def owl_is_named_individual(self: "GraphDB", iri: str) -> bool:
+def owl_is_named_individual(self: "GraphDB", iri: Union[str, IRI]) -> bool:
     """
-    Checks if the given IRI corresponds to an OWL named individual.
+    Check if the given IRI corresponds to an OWL named individual.
 
-    This method verifies whether the provided IRI is explicitly defined as
-    an `owl:NamedIndividual` in the RDF graph by checking for the existence
-    of the triple (IRI, rdf:type, owl:NamedIndividual). If the triple does
-    not exist, a warning is logged.
+    Asks for `iri rdf:type owl:NamedIndividual`.
 
     Args:
-        iri (str): The IRI to be checked.
+        iri (Union[str, IRI]): The IRI to check.
 
     Returns:
         bool: True if the IRI is a named individual, False otherwise.
     """
-    if not self.triple_exists(iri, "rdf:type", "owl:NamedIndividual"):
-        self.logger.debug(f"IRI {iri} is not a named individual!")
-        return False
-    return True
+    return self.triple_exists((iri, "rdf:type", "owl:NamedIndividual"))
 
 
 def owl_get_classes_of_individual(
     self: "GraphDB",
-    instance_iri: str,
-    ignored_prefixes: Optional[List[str]] = None,
-    local_name: bool = False,
-    include_explicit=True,
-    include_implicit=False,
-) -> List[str]:
+    instance_iri: Union[str, IRI],
+    ignored_prefixes: Optional[List[Namespace]] = None,
+    local_name: Optional[bool] = False,
+    include_explicit: Optional[bool] = True,
+    include_implicit: Optional[bool] = False,
+) -> List[Union[IRI, str]]:
     """
-    Retrieves the OWL classes associated with a given individual (instance IRI)
-    from a graph database.
+    Get the OWL classes associated with a given individual.
+
+    Builds a SPARQL query that returns the classes for an instance IRI and
+    optionally filters out results by prefix or returns local names only.
 
     Args:
-        instance_iri (str): The IRI of the individual whose classes are to be retrieved.
-        ignored_prefixes (Optional[List[str]]): A list of prefixes to ignore when
-        filtering classes. Defaults to ["owl", "rdfs"] if not provided.
-        local_name (bool): If True, returns the local names of the classes
-        (i.e., the part of the IRI after the last '#', '/', or ':').
-        Defaults to False.
-        include_explicit (bool): If True, includes explicitly defined triples in the query.
-        Defaults to True.
-        include_implicit (bool): If True, includes implicitly inferred triples in the query.
-        Defaults to False.
+        instance_iri (Union[str, IRI]): IRI of the individual to inspect.
+        ignored_prefixes (Optional[List[Namespace]]): Prefixes/namespaces to ignore
+            when collecting classes. Defaults to ["owl", "rdfs"].
+        local_name (Optional[bool]): If True, return only the local names of the classes. Defaults to False.
+        include_explicit (Optional[bool]): Include explicit triples. Defaults to True.
+        include_implicit (Optional[bool]): Include inferred triples. Defaults to False.
 
     Returns:
-        List[str]: A list of class IRIs or local names (depending on the value
-        of `local_name`) associated with the given individual.
-
-    Notes:
-        - The method constructs a SPARQL query to retrieve the classes of the
-            individual and applies optional filtering based on ignored prefixes.
-        - If no results are found, an empty list is returned.
-        - The `utils.get_local_name` function is used to extract the local name
-            from the IRI if `local_name` is set to True.
+        List[Union[IRI, str]]: Class IRIs, or local names if `local_name=True`.
     """
+    instance_iri = IRI(instance_iri)
     ignored_prefixes = (
         ignored_prefixes if ignored_prefixes is not None else ["owl", "rdfs"]
     )
@@ -170,8 +159,7 @@ def owl_get_classes_of_individual(
         filter_conditions = ""
 
     query = SPARQLQuery(
-        named_graph=self._named_graph,
-        prefixes=self._prefixes,
+        named_graph=self.named_graph,
         include_explicit=include_explicit,
         include_implicit=include_implicit,
     )
@@ -180,7 +168,7 @@ def owl_get_classes_of_individual(
         variables=["?class"],
         where_clauses=[
             f"?class rdf:type owl:Class .",
-            f"{utils.prepare_subject(instance_iri)} rdf:type ?class .",
+            f"{instance_iri.n3()} rdf:type ?class .",
             filter_conditions,
         ],
     )
@@ -192,7 +180,14 @@ def owl_get_classes_of_individual(
     if results is None:
         return []
 
-    classes = [result["class"]["value"] for result in results["results"]["bindings"]]
-    if local_name is True:
-        classes = [utils.get_local_name(iri) for iri in classes]
+    if local_name:
+        classes = [
+            utils.get_local_name(result["class"]["value"])
+            for result in results["results"]["bindings"]
+        ]
+        return classes
+
+    classes = [
+        IRI(result["class"]["value"]) for result in results["results"]["bindings"]
+    ]
     return classes

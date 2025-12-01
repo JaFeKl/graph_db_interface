@@ -1,19 +1,128 @@
 import logging
-from typing import Union, Dict, Optional, Any
-from rdflib import URIRef, Literal, XSD, Dataset
+from typing import TypeAlias, Union, Optional, Any, Tuple
+from rdflib import Literal, XSD, Dataset
 from rdflib.plugins.sparql.processor import prepareQuery
-from urllib.parse import urlparse
 from graph_db_interface.exceptions import (
     InvalidInputError,
-    InvalidIRIError,
     InvalidQueryError,
 )
+from graph_db_interface.utils.iri import IRI
 
 
 LOGGER = logging.getLogger(__name__)
 
+Triple: TypeAlias = Tuple[
+    Union[str, IRI],
+    Union[str, IRI],
+    Union[str, IRI, Literal],
+]
+
+PartialTriple: TypeAlias = Tuple[
+    Optional[Union[str, IRI]],
+    Optional[Union[str, IRI]],
+    Optional[Union[str, IRI, Literal]],
+]
+
+
+def sanitize_triple(
+    triple: Triple,
+    allow_partial: Optional[bool] = False,
+) -> Triple:
+    """
+    Validates and converts the components of a triple to their appropriate types.
+
+    - A valid triple must have three entries (subject, predicate, object) defined.
+    - If allow_partial is false, no entry may be None. Otherweise, at least one entry
+    must be not None.
+    - Subject and predicate must be valid IRIs.
+    - The object can be either an IRI or a Literal
+        - If the object is of type IRI, URIRef, or str, it will be converted to IRI.
+        - If an object of type str should be treated as a Literal, it must be
+        explicitly converted to Literal before passing.
+        - If the object is of any other type, it will be converted to a Literal.
+
+    Args:
+        triple (Triple): The triple to validate and convert.
+        allow_partial (Optional[bool]): Whether to allow partial triples. Defaults to False.
+
+    Returns:
+        Triple: The validated and converted triple.
+
+    Raises:
+        InvalidInputError: If the triple does not have three or too many None entries.
+        TypeError: If subject or predicate are not of type str, URIRef, or IRI.
+        InvalidIRIError: If object is of type str or URIRef (except Literal) and not in a valid IRI format.
+    """
+
+    if allow_partial:
+        if len(triple) != 3 or all(e is None for e in triple):
+            error_message = f"Triple requires three components, at least one of which is not None: {triple}"
+            LOGGER.error(error_message)
+            raise InvalidInputError(error_message)
+    else:
+        if len(triple) != 3 or any(e is None for e in triple):
+            error_message = (
+                f"Triple requires three components, neither of which is None: {triple}"
+            )
+            LOGGER.error(error_message)
+            raise InvalidInputError(error_message)
+
+    sub, pred, obj = triple
+
+    # Sub must be IRI
+    if sub is not None and not isinstance(sub, IRI):
+        sub = IRI(sub)
+
+    # Pred must be IRI
+    if pred is not None and not isinstance(pred, IRI):
+        pred = IRI(pred)
+
+    # Pred must be IRI or Literal
+    # If str, try IRI first, then Literal. Otherwise, Literal.
+    if obj is not None and not isinstance(obj, (IRI, Literal)):
+        if isinstance(obj, str):
+            try:
+                obj = IRI(str(obj))
+            except Exception as e:
+                error_message = (
+                    "Object is of type str but cannot be converted to IRI. If object "
+                    + f"is a <Literal>, explicitly convert before passing: {obj} ({e})"
+                )
+                LOGGER.error(error_message)
+                raise type(e)(error_message) from e
+        else:
+            obj = Literal(obj)
+    return sub, pred, obj
+
+
+def triple_to_string(
+    triple: Triple,
+    line_end: Optional[str] = None,
+) -> str:
+    """Convert a triple to its string representation suitable for SPARQL queries.
+
+    Args:
+        triple (Triple): The triple to convert.
+    Returns:
+        str: The string representation of the triple.
+    """
+    sub, pred, obj = triple
+    return f"{sub.n3()} {pred.n3()} {obj.n3()}" + (f" {line_end}" if line_end else "")
+
 
 def validate_query(query: str):
+    """
+    Validate a SPARQL SELECT/ASK query string by parsing it.
+
+    Args:
+        query (str): The SPARQL query to validate.
+
+    Returns:
+        bool: True if parsing succeeds.
+
+    Raises:
+        InvalidQueryError: If parsing fails.
+    """
     try:
         # Attempt to prepare the query
         prepareQuery(query)
@@ -24,7 +133,21 @@ def validate_query(query: str):
         raise InvalidQueryError(error_message)
 
 
-def validate_update_query(query: str):
+def validate_update_query(
+    query: str,
+):
+    """
+    Validate a SPARQL UPDATE string by applying it to a temporary dataset.
+
+    Args:
+        query (str): The SPARQL UPDATE string to validate.
+
+    Returns:
+        bool: True if validation succeeds.
+
+    Raises:
+        InvalidQueryError: If validation fails.
+    """
     try:
         g = Dataset()
         g.update(query)
@@ -35,54 +158,22 @@ def validate_update_query(query: str):
         raise InvalidQueryError(error_message)
 
 
-def ensure_absolute(iri: str):
-    """Ensure the IRI is in absolute form enclosed in <>.
-
-    If the IRI is already absolute (i.e., enclosed in <>), it returns as is.
-    Otherwise, it wraps the IRI in <>.
+def to_literal(
+    value: Any,
+    datatype: Optional[str] = None,
+    as_string: Optional[bool] = False,
+) -> Union[Literal, str]:
+    """
+    Convert a Python value to an XSD literal.
 
     Args:
-        iri (str): The input IRI.
+        value (Any): The Python value to convert.
+        datatype: (Optional[str]) Optional XSD datatype to use; inferred as `XSD.string` for strings.
+        as_string (Optional[bool]): If True, return the N3 string form of the literal. Defaults to False.
 
     Returns:
-        str: The absolute IRI in <> format.
+        Union[Literal, str]: The `rdflib.Literal` or its N3 string form when `as_string=True`.
     """
-    iri = iri.strip()
-
-    # Check if already enclosed in <>
-    if iri.startswith("<") and iri.endswith(">"):
-        return iri
-
-    return f"<{iri}>"
-
-
-def is_absolute(iri: str) -> bool:
-    """Check if the IRI is in absolute form.
-
-    Args:
-        iri (str): The input IRI.
-
-    Returns:
-        bool: True if the IRI is absolute, False otherwise.
-    """
-    return iri.startswith("<") and iri.endswith(">")
-
-
-def strip_angle_brackets(iri: str) -> str:
-    """Strip the angle brackets from the IRI if present.
-
-    Args:
-        iri (str): The input IRI.
-
-    Returns:
-        str: The IRI without angle brackets.
-    """
-    # Remove angle brackets if they exist
-    return iri[1:-1] if is_absolute(iri) else iri
-
-
-def to_literal(value, datatype=None, as_string: bool = False) -> Union[Literal, str]:
-    """Convert a Python value to its corresponding XSD literal representation."""
     if isinstance(value, str) and datatype is None:
         datatype = XSD.string
     literal = Literal(value, datatype=datatype)
@@ -92,26 +183,62 @@ def to_literal(value, datatype=None, as_string: bool = False) -> Union[Literal, 
     return literal
 
 
-def from_xsd_literal(value: str, datatype: str):
+def from_xsd_literal(
+    value: str,
+    datatype: str,
+):
     """
-    Convert a string value to its corresponding Python type based on the XSD datatype.
+    Convert an XSD-typed string value to a Python value.
+
+    Args:
+        value (str): The lexical form of the literal.
+        datatype (str): The XSD datatype IRI.
+
+    Returns:
+        Any: The converted Python value.
     """
     literal = Literal(value, datatype=datatype)
     return literal.toPython()
 
 
-def convert_query_result_to_python_type(result_binding: dict) -> Any:
-    """Convert a SPARQL query result binding to its corresponding Python type."""
+def convert_query_result_to_python_type(
+    result_binding: dict,
+) -> Any:
+    """
+    Convert a SPARQL binding entry to a Python value.
+
+    Args:
+        result_binding (dict): A single binding dict (e.g., `{ 'type': 'literal', ... }`).
+
+    Returns:
+        Any: A Python value converted from the binding, or the raw string when not typed.
+    """
     type = result_binding.get("type")
     if type == "literal" and "datatype" in result_binding:
         return from_xsd_literal(result_binding["value"], result_binding["datatype"])
+    elif type == "uri":
+        return IRI(result_binding["value"])
     else:
         # If no datatype is provided, return the value as is
         return result_binding["value"]
 
 
-def get_local_name(iri: str):
-    iri = URIRef(strip_angle_brackets(iri))
+def get_local_name(
+    iri: str,
+) -> str:
+    """
+    Extract the local name from an IRI.
+
+    Prefers the fragment after `#` when present; otherwise returns the last path
+    segment after `/`.
+
+    Args:
+        iri (str): The input IRI (full or shorthand acceptable).
+
+    Returns:
+        str: The local name component.
+    """
+    iri = IRI(iri)
     # If there's a fragment (i.e., the part after '#')
     if iri.fragment:
         return iri.fragment
@@ -120,192 +247,22 @@ def get_local_name(iri: str):
     return iri.split("/")[-1]
 
 
-def escape_string_literal(value: Union[str, Literal]) -> Union[Literal, str]:
-    if (
-        isinstance(value, Literal)
-        and isinstance(value.value, str)
-        # Try to prevent double escaping.
-        and not '\\"' in value
-    ):
-        value = value.replace('"', '\\"')
-        return Literal(f'"{value}"', datatype=XSD.string)
-
-    return value
-
-
-def is_iri(value: str) -> bool:
-    """Checks if the provided value is a valid IRI."""
-    stripped = strip_angle_brackets(value)
-    parseresult = urlparse(stripped)
-    if not parseresult.scheme or not parseresult.netloc:
-        return False
-    return True
-
-
-def is_shorthand_iri(value: str, prefixes: Optional[Dict[str, str]] = None) -> bool:
-    """
-    Checks if the provided value is in the form of a shorthand IRI (prefix:localName).
-
-    A shorthand IRI consists of a prefix and a local name separated by a colon (":").
-    This function verifies if the given value matches this format and if a dict of prefixes
-    is given in the provided dictionary of prefixes.
-
-        value (str): The string to check if it is a shorthand IRI.
-        prefixes (Optional[Dict[str, str]]): A dictionary mapping prefixes to their full IRIs.
-
-        bool: True if the value is in the form of a valid shorthand IRI, False otherwise.
-    """
-    if is_iri(value):
-        return False
-    elif ":" in value:
-        # Check if value can be splitted exactly in two parts
-        if len(value.split(":")) != 2:
-            return False
-        prefix = value.split(":")[0]
-        if prefixes:
-            # Check if the prefix exists in the provided prefixes dictionary
-            if prefix in prefixes:
-                return True
-            else:
-                LOGGER.warning(
-                    f"Prefix '{prefix}' not found in the provided prefixes dictionary."
-                )
-                return False
-        else:
-            # If no prefixes are provided, just check the format
-            return True
-    else:
-        return False
-
-
-def prepare_subject(sub: str, ensure_iri: bool = True) -> str:
-    """
-    Prepares and validates a subject string, ensuring it conforms to IRI (Internationalized Resource Identifier)
-    standards if required.
-
-    Args:
-        sub (str): The subject string to validate and prepare.
-        ensure_iri (bool, optional): If True, ensures the subject is a valid IRI. Defaults to True.
-
-    Returns:
-        str: The prepared subject string, either as an absolute IRI or as provided if valid.
-
-    Raises:
-        InvalidInputError: If the provided subject is not a string.
-        InvalidIRIError: If the subject is not a valid IRI and `ensure_iri` is True.
-    """
-    if not type(sub) == str:
-        raise InvalidInputError(f"Provided subject '{sub}' is not a string.")
-    if is_iri(sub):
-        return ensure_absolute(sub)
-    elif is_shorthand_iri(sub):
-        return sub
-    else:
-        if ensure_iri is True:
-            raise InvalidIRIError(
-                f"Provided subject '{sub}' is not a valid IRI. Ensure 'ensure_iri' is set correctly."
-            )
-        else:
-            return sub
-
-
-def prepare_predicate(pred: str, ensure_iri: bool = True) -> str:
-    """
-    Prepares a predicate string by validating and optionally ensuring it is an IRI (Internationalized Resource Identifier).
-
-    Args:
-        pred (str): The predicate to be validated and processed.
-        ensure_iri (bool, optional): If True, ensures the predicate is a valid IRI. Defaults to True.
-
-    Returns:
-        str: The processed predicate, either as an absolute IRI or as provided if valid.
-
-    Raises:
-        InvalidInputError: If the provided predicate is not a string.
-        InvalidIRIError: If `ensure_iri` is True and the provided predicate is not a valid IRI.
-    """
-    if not type(pred) == str:
-        raise InvalidInputError(f"Provided subject '{pred}' is not a string.")
-    if is_iri(pred):
-        return ensure_absolute(pred)
-    elif is_shorthand_iri(pred):
-        return pred
-    else:
-        if ensure_iri is True:
-            raise InvalidIRIError(
-                f"Provided predicate '{pred}' is not a valid IRI. Ensure 'ensure_iri' is set correctly."
-            )
-        else:
-            return pred
-
-
-def prepare_object(
-    obj: Any, as_string: bool = False, ensure_iri: bool = False
-) -> Union[str, Literal]:
-    """
-    Prepares an object for use in a graph database context by ensuring it is in the
-    correct format, such as an IRI (Internationalized Resource Identifier) or a Literal.
-
-    Args:
-        obj (Any): The object to be prepared. It can be a string, Literal, or any other type.
-        as_string (bool, optional): If True, converts a Literal object to its string representation.
-            Defaults to False.
-        ensure_iri (bool, optional): If True, ensures that the provided object is a valid IRI.
-            Raises an InvalidIRIError if the object is not a valid IRI. Defaults to False.
-
-    Returns:
-        Union[str, Literal]: The prepared object. This can be:
-            - A string representing an absolute or shorthand IRI.
-            - A Literal object or its string representation if `as_string` is True.
-
-    Raises:
-        InvalidIRIError: If `ensure_iri` is True and the provided object is not a valid IRI.
-    """
-    if ensure_iri:
-        if not type(obj) == str:
-            raise InvalidIRIError(
-                f"Provided object '{obj}' is not a string. Cannot be a valid IRI."
-            )
-        if is_iri(obj):
-            return ensure_absolute(obj)
-        elif is_shorthand_iri(obj):
-            return obj
-        else:
-            raise InvalidIRIError(
-                f"Provided object '{obj}' is not a valid IRI. Ensure 'ensure_iri' is set correctly."
-            )
-
-    if type(obj) == str:
-        if is_iri(obj):
-            return ensure_absolute(obj)
-        else:
-            return obj
-
-    if type(obj) == Literal:
-        # TODO: How to handle string escapes, obj: Literal = escape_string_literal(obj)
-        if as_string:
-            return obj.n3()
-        else:
-            return obj
-
-    return to_literal(obj, as_string=as_string)
-
-
-def encapsulate_named_graph(named_graph: Optional[str], content: str) -> str:
+def encapsulate_named_graph(
+    named_graph: IRI,
+    content: str,
+) -> str:
     """
     Encapsulates the given content within a named graph block if a named graph is provided.
 
     Args:
-        named_graph (Optional[str]): The IRI of the named graph. If None, the content is returned as is.
+        named_graph (IRI): The IRI of the named graph. If None, the content is returned as is.
         content (str): The SPARQL content to encapsulate.
 
     Returns:
         str: The encapsulated content or the original content if no named graph is provided.
     """
     if named_graph:
-        named_graph = ensure_absolute(named_graph)
-        return f"""
-GRAPH {named_graph} {{
+        return f"""GRAPH {named_graph.n3()} {{
     {content}
 }}"""
     return content

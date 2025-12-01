@@ -3,6 +3,8 @@
 from typing import List, Union, Any, Optional, Tuple, TYPE_CHECKING
 from rdflib import Literal
 from graph_db_interface.utils import utils
+from graph_db_interface.utils.iri import IRI
+from graph_db_interface.utils.utils import Triple, PartialTriple
 from graph_db_interface.exceptions import InvalidInputError
 
 from graph_db_interface.sparql_query import SPARQLQuery
@@ -13,63 +15,70 @@ if TYPE_CHECKING:
 
 def triples_get(
     self: "GraphDB",
-    sub: Optional[str] = None,
-    pred: Optional[str] = None,
-    obj: Optional[Any] = None,
-    include_explicit: bool = True,
-    include_implicit: bool = True,
-) -> Union[List[Tuple], List[str]]:
+    triple: Optional[PartialTriple] = None,
+    sub: Optional[Union[str, IRI]] = None,
+    pred: Optional[Union[str, IRI]] = None,
+    obj: Optional[Union[str, IRI, Literal]] = None,
+    include_explicit: Optional[bool] = True,
+    include_implicit: Optional[bool] = True,
+) -> List[Tuple[IRI, IRI, Any]]:
     """
-    Retrieve triples based on the specified subject, predicate, and/or object.
+    Retrieve triples matching any combination of subject, predicate, or object.
 
     Args:
-        sub (Optional[str]): The subject of the triple. Can be an IRI, shorthand IRI, or a string.
-        pred (Optional[str]): The predicate of the triple. Can be an IRI, shorthand IRI, or a string.
-        obj (Optional[Any]): The object of the triple. Can be an IRI, shorthand IRI, Literal, or a string.
-        include_explicit (bool): Whether to include explicitly defined triples. Defaults to True.
-        include_implicit (bool): Whether to include implicitly inferred triples. Defaults to True.
+        triple (Optional[PartialTriple]): Combined (subject, predicate, object) filter tuple. Use this
+            or individual `sub`/`pred`/`obj`.
+        sub (Optional[Union[str, IRI]]): Subject filter (IRI/shorthand/string).
+        pred (Optional[Union[str, IRI]]): Predicate filter (IRI/shorthand/string).
+        obj (Optional[Union[str, IRI, Literal]]): Object filter (IRI/shorthand/Literal/string).
+        include_explicit (Optional[bool]): Include explicit triples. Defaults to True.
+        include_implicit (Optional[bool]): Include inferred triples. Defaults to True.
 
     Returns:
-        Union[List[Tuple], List[str]]: A list of triples matching the query. Each triple is represented as a tuple
-        (subject, predicate, object), where the object is converted to its Python type if applicable.
+        List[Tuple[IRI, IRI, Any]]: Matching triples as `(subject, predicate, object)`, where the
+        object is converted to an appropriate Python type when applicable.
 
     Raises:
-        InvalidInputError: If none of the subject, predicate, or object is provided.
+        InvalidInputError: If neither or both of `triple` and any of `sub`/`pred`/`obj` are provided.
     """
 
-    if sub is None and pred is None and obj is None:
+    elems_given = sub is not None or pred is not None or obj is not None
+    if (triple and elems_given) or (not triple and not elems_given):
         raise InvalidInputError(
-            "At least one of subject, predicate, or object must be provided"
+            "Either 'triple' or 'sub/pred/obj' must be provided, not both."
         )
+
+    sub, pred, obj = utils.sanitize_triple(
+        triple or (sub, pred, obj), allow_partial=True
+    )
 
     binds = []
     filter = []
 
-    def append_bind_and_filter(var: str, value: str):
-        if utils.is_iri(value):
-            binds.append(f"BIND({utils.ensure_absolute(value)} AS {var})")
-        elif utils.is_shorthand_iri(value):
-            binds.append(f"BIND({value} AS {var})")
+    def _append_bind_and_filter(
+        var: str,
+        value: Union[IRI, Literal],
+    ) -> None:
+        if isinstance(value, IRI):
+            binds.append(f"BIND({value.n3()} AS {var})")
         elif isinstance(value, Literal):
             filter.append(f"FILTER(?o={value.n3()})")
         else:
-            filter.append(f"FILTER(CONTAINS(STR({var}), '{value}'))")
+            raise Exception(
+                f"Value must be either IRI or Literal, is type {type(value)}"
+            )
 
     if sub is not None:
-        sub = utils.prepare_subject(sub, ensure_iri=False)
-        append_bind_and_filter("?s", sub)
+        _append_bind_and_filter("?s", sub)
 
     if pred is not None:
-        pred = utils.prepare_predicate(pred, ensure_iri=False)
-        append_bind_and_filter("?p", pred)
+        _append_bind_and_filter("?p", pred)
 
     if obj is not None:
-        obj = utils.prepare_object(obj, ensure_iri=False)
-        append_bind_and_filter("?o", obj)
+        _append_bind_and_filter("?o", obj)
 
     query = SPARQLQuery(
-        named_graph=self._named_graph,  # type: ignore
-        prefixes=self._prefixes,
+        named_graph=self.named_graph,
         include_explicit=include_explicit,
         include_implicit=include_implicit,
     )
@@ -87,8 +96,8 @@ def triples_get(
     results = self.query(query=query_string)
     converted_results = [
         (
-            result["s"]["value"],
-            result["p"]["value"],
+            IRI(result["s"]["value"]),
+            IRI(result["p"]["value"]),
             utils.convert_query_result_to_python_type(result["o"]),
         )
         for result in results["results"]["bindings"]
@@ -96,228 +105,268 @@ def triples_get(
     return converted_results
 
 
-def triples_add(
-    self,
-    triples_to_add: List[Tuple[str, str, Any]],
-    check_exist: bool = True,
-    named_graph: Optional[str] = None,
+def any_triple_exists(
+    self: "GraphDB",
+    triples: List[Triple],
+    named_graph: Optional[IRI] = None,
 ) -> bool:
     """
-    Adds multiple triples to the graph database.
+    Check if any of the given triples exist.
 
     Args:
-        triples_to_add (List[Tuple[str, str, Any]]): A list of triples to add, where each triple is represented as a tuple (subject, predicate, object).
-        check_exist (bool, optional): Flag to check if any of the triples already exists. Then, no triple will be added. In Defaults to True.
+        triples (List[Triple]): Triples to check.
+        named_graph (Optional[IRI]): Override the client's default named graph.
 
     Returns:
-        bool: True if all triples were successfully added, False otherwise.
+        bool: True if at least one exists, False otherwise.
     """
-    if not triples_to_add:
-        raise InvalidInputError("The list of triples to add must not be empty.")
 
-    prepared_triples = []
+    if not triples:
+        raise InvalidInputError(f"Cannot check existence of empty triple list.")
 
-    for sub, pred, obj in triples_to_add:
-        sub = utils.prepare_subject(sub, ensure_iri=True)
-        pred = utils.prepare_predicate(pred, ensure_iri=True)
-        obj = utils.prepare_object(obj, as_string=True)
+    for triple in triples:
+        triple = utils.sanitize_triple(triple)
 
-        if not sub or not pred or not obj:
-            raise InvalidInputError(f"Invalid triple: ({sub}, {pred}, {obj})")
-            return False
-        prepared_triples.append((sub, pred, obj))
-
-    if check_exist:
-        ask_query = SPARQLQuery(
-            named_graph=self._named_graph,
-            prefixes=self._prefixes,
-        )
-        ask_query.add_ask_block(
-            where_clauses=[
-                f"{sub} {pred} {obj} ." for sub, pred, obj in prepared_triples
-            ],
-        )
-        ask_query_string = ask_query.to_string()
-        if ask_query_string is None:
-            return False
-        ask_result = self.query(query=ask_query_string, update=False)
-        if ask_result is not None and ask_result["boolean"]:
-            self.logger.warning(
-                "One of the triples to add already exists in the graph."
+        if self.triple_exists(triple):
+            self.logger.debug(
+                f"At least this triple exists: ({utils.triple_to_string(triple)}), named_graph: {named_graph or self.named_graph or "default"}, repository: {self._repository}"
             )
-            return False
+            return True
 
-    query = SPARQLQuery(
-        named_graph=self._named_graph,
-        prefixes=self._prefixes,
+    self.logger.debug(
+        f"None of the triples exists: ({triples}), named_graph: {named_graph or self.named_graph or "default"}, repository: {self._repository}"
     )
-    query.add_insert_data_block(
-        triples=prepared_triples,
-    )
+    return False
 
-    # if check_exist:
-    #     query.add_insert_exists_block(
-    #         triples=prepared_triples,
-    #     )
-    # else:
-    #     query.add_insert_data_block(
-    #         triples=prepared_triples,
-    #     )
 
+def all_triple_exists(
+    self: "GraphDB",
+    triples: List[Triple],
+    named_graph: Optional[IRI] = None,
+) -> bool:
+    """
+    Check if all of the given triples exist.
+
+    Args:
+        triples (List[Triple]): Triples to check.
+        named_graph (Optional[IRI]): Override the client's default named graph.
+
+    Returns:
+        bool: True if all exist, False otherwise.
+    """
+
+    if not triples:
+        raise InvalidInputError(f"Cannot check existence of empty triple list.")
+
+    triple_strings = []
+    for triple in triples:
+        triple = utils.sanitize_triple(triple)
+        triple_strings.append(utils.triple_to_string(triple, "."))
+
+    query = SPARQLQuery(named_graph=named_graph or self.named_graph)
+    query.add_ask_block(where_clauses=triple_strings)
     query_string = query.to_string()
-    if query_string is None:
+    if not query_string:
+        raise InvalidInputError(
+            f"Could not generate 'all_triple_exists' query for triples ({triple_strings}), named_graph: {named_graph or self.named_graph or "default"}, repository: {self._repository}"
+        )
+
+    ask_result = self.query(query=query_string, update=False)
+    if ask_result is None:
+        raise InvalidInputError(
+            f"Could not query 'all_triple_exists' for triples ({triple_strings}), named_graph: {named_graph or self.named_graph or "default"}, repository: {self._repository}"
+        )
+
+    if ask_result["boolean"] is False:
+        self.logger.debug(
+            f"Not all of the triples exist: ({triple_strings}), named_graph: {named_graph or self.named_graph or "default"}, repository: {self._repository}"
+        )
         return False
 
-    if named_graph:
-        old_named_graph = self._named_graph
-        self.named_graph = named_graph
+    self.logger.debug(
+        f"All of the triples exist: ({triple_strings}), named_graph: {named_graph or self.named_graph or "default"}, repository: {self._repository}"
+    )
+    return True
+
+
+def triples_add(
+    self: "GraphDB",
+    triples_to_add: List[Triple],
+    check_exist: Optional[bool] = True,
+    named_graph: Optional[IRI] = None,
+) -> bool:
+    """
+    Add multiple triples to the graph database.
+
+    Args:
+        triples_to_add (List[Triple]): Triples to add.
+        check_exist (Optional[bool]): If True, abort when any triple already exists. Defaults to True.
+        named_graph (Optional[IRI]): Override the client's default named graph.
+
+    Returns:
+        bool: True if all triples were added, False otherwise.
+    """
+    if not triples_to_add:
+        return True
+
+    validated_triples_to_add = [
+        utils.sanitize_triple(triple) for triple in triples_to_add
+    ]
+
+    if check_exist and self.any_triple_exists(
+        triples=validated_triples_to_add, named_graph=named_graph
+    ):
+        self.logger.warning(
+            "At least one of the triples to add already exists in the graph."
+        )
+        return False
+
+    triple_strings = [
+        utils.triple_to_string(triple, ".") for triple in validated_triples_to_add
+    ]
+
+    query = SPARQLQuery(named_graph=named_graph or self.named_graph)
+    query.add_insert_data_block(
+        triples=validated_triples_to_add,
+    )
+    query_string = query.to_string()
+    if not query_string:
+        raise InvalidInputError(
+            f"Could not generate 'triples_add' query for triples ({triple_strings}), named_graph: {named_graph or self.named_graph or "default"}, repository: {self._repository}"
+        )
 
     result = self.query(query=query_string, update=True)
     if not result:
-        self.logger.warning(f"Failed to add triples: {prepared_triples}")
+        self.logger.warning(
+            f"Failed to add triples: ({triple_strings}), named_graph: {named_graph or self.named_graph or "default"}, repository: {self._repository}"
+        )
         return False
 
-    if named_graph:
-        self.named_graph = named_graph
-
+    self.logger.debug(
+        f"Successfully added triples: ({triple_strings}), named_graph: {named_graph or self.named_graph or "default"}, repository: {self._repository}"
+    )
     return result
 
 
 def triples_delete(
-    self,
-    triples_to_delete: List[Tuple[str, str, Union[str, Literal]]],
-    check_exist: bool = True,
+    self: "GraphDB",
+    triples_to_delete: List[Triple],
+    check_exist: Optional[bool] = True,
+    named_graph: Optional[IRI] = None,
 ) -> bool:
     """
     Delete multiple triples from the graph database.
 
     Args:
-        triples_to_delete (List[Tuple[str, str, Union[str, Literal]]]): A list of triples to delete, where each triple is represented as a tuple (subject, predicate, object).
-        check_exist (bool, optional): Flag to check if each triple exists before attempting to delete it. Defaults to True.
+        triples_to_delete (List[Triple]): Triples to delete.
+        check_exist (Optional[bool]): If True, abort when any triple does not exist. Defaults to True.
+        named_graph (Optional[IRI]): Override the client's default named graph.
 
     Returns:
-        bool: Returns True if all triples were successfully deleted, False otherwise.
+        bool: True if all triples were deleted, False otherwise.
     """
     if not triples_to_delete:
-        raise InvalidInputError("The list of triples to delete must not be empty.")
+        return True
 
-    prepared_triples = []
-    where_clauses = []
-    for sub, pred, obj in triples_to_delete:
-        sub = utils.prepare_subject(sub, ensure_iri=True)
-        pred = utils.prepare_predicate(pred, ensure_iri=True)
-        obj = utils.prepare_object(obj, as_string=True)
+    validated_triples_to_delete = [
+        utils.sanitize_triple(triple) for triple in triples_to_delete
+    ]
 
-        if check_exist:
+    if check_exist and not self.all_triple_exists(
+        triples=validated_triples_to_delete, named_graph=named_graph
+    ):
+        self.logger.warning(
+            "At least one of the triples to delete does not exist in the graph."
+        )
+        return False
 
-            if not self.triple_exists(sub, pred, obj):
-                self.logger.warning(
-                    f"Triple does not exist and cannot be deleted: {sub} {pred} {obj}"
-                )
-                return False
-            where_clauses.append(f"{sub} {pred} {obj} .")
-        prepared_triples.append((sub, pred, obj))
+    triple_strings = [
+        utils.triple_to_string(triple, ".") for triple in validated_triples_to_delete
+    ]
 
-    query = SPARQLQuery(
-        named_graph=self._named_graph,
-        prefixes=self._prefixes,
-    )
-
+    query = SPARQLQuery(named_graph=named_graph or self.named_graph)
     query.add_delete_data_block(
-        triples=prepared_triples,
+        triples=validated_triples_to_delete,
     )
+    query_string = query.to_string()
+    if not query_string:
+        raise InvalidInputError(
+            f"Could not generate 'triples_delete' query for triples ({triple_strings}), named_graph: {named_graph or self.named_graph or "default"}, repository: {self._repository}"
+        )
 
-    result = self.query(query=query.to_string(), update=True)
-    if result:
-        self.logger.debug(f"Successfully deleted triples: {prepared_triples}")
-    else:
-        self.logger.warning(f"Failed to delete triples: {prepared_triples}")
+    result = self.query(query=query_string, update=True)
+    if not result:
+        self.logger.warning(
+            f"Failed to delete triples: ({triple_strings}), named_graph: {named_graph or self.named_graph or "default"}, repository: {self._repository}"
+        )
+        return False
 
-    return result
+    self.logger.debug(
+        f"Successfully deleted triples: ({triple_strings}), named_graph: {named_graph or self.named_graph or "default"}, repository: {self._repository}"
+    )
+    return True
 
 
 def triples_update(
-    self,
-    old_triples: List[Tuple[str, str, Union[str, Literal]]],
-    new_triples: List[Tuple[str, str, Union[str, Literal]]],
-    check_exist: bool = True,
+    self: "GraphDB",
+    old_triples: List[Triple],
+    new_triples: List[Triple],
+    check_exist: Optional[bool] = True,
+    named_graph: Optional[IRI] = None,
 ) -> bool:
     """
     Update multiple RDF triples in the triplestore.
 
     Args:
-        old_triples (List[Tuple[str, str, Union[str, Literal]]]): A list of triples to update, where each triple is represented as a tuple (subject, predicate, object).
-        new_triples (List[Tuple[Optional[str], Optional[str], Optional[Union[str, Literal]]]]): A list of new triples to replace the old triples.
-        check_exist (bool): Whether to check for the existence of old triples before updating.
+        old_triples (List[Triple]): Triples to be replaced.
+        new_triples (List[Triple]): Replacement triples (same length as `old_triples`).
+        check_exist (Optional[bool]): If True, abort when any old triple does not exist. Defaults to True.
+        named_graph (Optional[IRI]): Override the client's default named graph.
 
     Returns:
         bool: True if the update was successful, False otherwise.
     """
-    if not old_triples or not new_triples:
-        raise InvalidInputError("Old and new triples lists must not be empty.")
+    if not old_triples and not new_triples:
+        return True
 
     if len(old_triples) != len(new_triples):
         raise InvalidInputError("Old and new triples lists must have the same length.")
 
-    delete_triples = []
-    insert_triples = []
-    where_clauses = []
+    validated_old_triples = [utils.sanitize_triple(triple) for triple in old_triples]
+    validated_new_triples = [utils.sanitize_triple(triple) for triple in new_triples]
 
-    for triple in old_triples:
-        if len(triple) != 3:
-            raise InvalidInputError(
-                "Each old triple must have exactly three elements (subject, predicate, object)."
-            )
-        sub_old, pred_old, obj_old = triple
-        if check_exist:
-            if not self.triple_exists(sub_old, pred_old, obj_old):
-                self.logger.warning(
-                    f"Triple does not exist: {sub_old} {pred_old} {obj_old}"
-                )
-                return False
+    if check_exist and not self.all_triple_exists(
+        triples=validated_old_triples, named_graph=named_graph
+    ):
+        self.logger.warning(
+            "At least one of the triples to update does not exist in the graph."
+        )
+        return False
 
-        sub_old = utils.prepare_subject(sub_old, ensure_iri=True)
-        pred_old = utils.prepare_predicate(pred_old, ensure_iri=True)
-        obj_old = utils.prepare_object(obj_old, as_string=True)
-        delete_triples.append((sub_old, pred_old, obj_old))
-        where_clauses.append(f"{sub_old} {pred_old} {obj_old} .")
+    old_triple_strings = [
+        utils.triple_to_string(triple, ".") for triple in validated_old_triples
+    ]
 
-    for triple in new_triples:
-        if len(triple) != 3:
-            raise InvalidInputError(
-                "Each new triple must have exactly three elements (subject, predicate, object)."
-            )
-        sub_new, pred_new, obj_new = triple
-
-        if sub_new is not None:
-            sub_new = utils.prepare_subject(sub_new, ensure_iri=True)
-        if pred_new is not None:
-            pred_new = utils.prepare_predicate(pred_new, ensure_iri=True)
-        if obj_new is not None:
-            obj_new = utils.prepare_object(obj_new, as_string=True)
-        insert_triples.append((sub_new, pred_new, obj_new))
-
-    query = SPARQLQuery(
-        named_graph=self._named_graph,
-        prefixes=self._prefixes,
-    )
+    query = SPARQLQuery(named_graph=named_graph or self.named_graph)
     query.add_delete_insert_data_block(
-        delete_triples=delete_triples,
-        insert_triples=insert_triples,
-        where_clauses=where_clauses,
+        delete_triples=validated_old_triples,
+        insert_triples=validated_new_triples,
+        where_clauses=old_triple_strings,
     )
     query_string = query.to_string(validate=True)
-    if query_string is None:
-        return False
+    if not query_string:
+        raise InvalidInputError(
+            f"Could not generate 'triples_update' query for triples ({validated_old_triples}) -> ({validated_new_triples}), named_graph: {named_graph or self.named_graph or "default"}, repository: {self._repository}"
+        )
+
     result = self.query(query=query_string, update=True)
-    if result:
-        self.logger.debug(
-            f"Successfully updated triples {old_triples} -> {new_triples}, named_graph: {self._named_graph}, repository:"
-            f" {self._repository}"
-        )
-    else:
+    if not result:
         self.logger.warning(
-            f"Failed to update triples {old_triples} -> {new_triples}, named_graph: {self._named_graph}, repository:"
-            f" {self._repository}"
+            f"Failed to update triples ({validated_old_triples}) -> ({validated_new_triples}), named_graph: {named_graph or self.named_graph or "default"}, repository: {self._repository}"
         )
-    return result
+        return False
+
+    self.logger.debug(
+        f"Successfully updated triples ({validated_old_triples}) -> ({validated_new_triples}), named_graph: {named_graph or self.named_graph or "default"}, repository: {self._repository}"
+    )
+    return True

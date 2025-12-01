@@ -1,28 +1,35 @@
 # To be imported into ..graph_db.py GraphDB class
 
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, TYPE_CHECKING
+from graph_db_interface.utils.iri import IRI
 
 if TYPE_CHECKING:
     from graph_db_interface import GraphDB
 
 
-def get_list_of_named_graphs(self: "GraphDB") -> Optional[List]:
-    """Get a list of named graphs in the currently set repository.
+def get_list_of_named_graphs(
+    self: "GraphDB",
+) -> List[IRI]:
+    """
+    Get the list of named graphs in the current repository.
 
     Returns:
-        Optional[List]: List of named graph IRIs. Can be an empty list.
+        List[IRI]: List of named graph IRIs. Can be an empty list.
+
+    Raises:
+        GraphDbException: If the underlying request to GraphDB fails.
     """
     # TODO: This query is quite slow and should be optimized
     # SPARQL query to retrieve all named graphs
 
     query = """
-    SELECT DISTINCT ?graph WHERE {
+SELECT DISTINCT ?graph WHERE {
     GRAPH ?graph { ?s ?p ?o }
-    }
+}
     """
     results = self.query(query)
 
     if results is None:
         return []
 
-    return [result["graph"]["value"] for result in results["results"]["bindings"]]
+    return [IRI(result["graph"]["value"]) for result in results["results"]["bindings"]]
