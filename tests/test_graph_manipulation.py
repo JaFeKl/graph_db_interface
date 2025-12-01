@@ -84,14 +84,50 @@ def test_update_triple(db: GraphDB):
     assert result is True
 
     # Input errors
+    # no new given
     with pytest.raises(InvalidInputError):
         db.triple_update((SUBJECT_1, PREDICATE_1, None))
 
-    # Nothing to update
+    # both new given
     with pytest.raises(InvalidInputError):
-        db.triple_update((SUBJECT_1, PREDICATE_1, OBJECT_1))
+        db.triple_update(
+            old_triple=(SUBJECT_1, PREDICATE_1, OBJECT_1),
+            new_triple=(NEW_SUBJECT_1, NEW_PREDICATE_1, NEW_OBJECT_1),
+            new_sub=NEW_SUBJECT_1,
+        )
 
-    # try to update the full triple and change its object
+    # old is incomplete
+    with pytest.raises(InvalidInputError):
+        db.triple_update(
+            old_triple=(SUBJECT_1, PREDICATE_1, None),
+            new_triple=(NEW_SUBJECT_1, NEW_PREDICATE_1, NEW_OBJECT_1),
+        )
+
+    # try to update the full triple
+    result = db.triple_update(
+        old_triple=(SUBJECT_1, PREDICATE_1, OBJECT_1),
+        new_triple=(NEW_SUBJECT_1, NEW_PREDICATE_1, NEW_OBJECT_1),
+    )
+    assert result is True
+
+    # try to update the individual entries
+    result = db.triple_update(
+        old_triple=(NEW_SUBJECT_1, NEW_PREDICATE_1, NEW_OBJECT_1), new_sub=SUBJECT_1
+    )
+    assert result is True
+
+    result = db.triple_update(
+        old_triple=(SUBJECT_1, NEW_PREDICATE_1, NEW_OBJECT_1),
+        new_pred=PREDICATE_1,
+    )
+    assert result is True
+
+    result = db.triple_update(
+        old_triple=(SUBJECT_1, PREDICATE_1, NEW_OBJECT_1), new_obj=OBJECT_1
+    )
+    assert result is True
+
+    # adressing via individual arguments
     result = db.triple_update(
         (SUBJECT_1, PREDICATE_1, OBJECT_1),
         new_sub=NEW_SUBJECT_1,
@@ -100,6 +136,7 @@ def test_update_triple(db: GraphDB):
     )
     assert result is True
 
+    # Cleanup
     result = db.triple_delete((NEW_SUBJECT_1, NEW_PREDICATE_1, NEW_OBJECT_1))
     assert result is True
 
@@ -213,6 +250,110 @@ def test_iri_exists(db: GraphDB):
     assert result is False
 
     result = db.triple_delete((SUBJECT_1, PREDICATE_1, OBJECT_1))
+    assert result is True
+
+
+def test_triple_exists(db: GraphDB):
+    # Test return on empty DB
+    result = db.triple_exists((SUBJECT_1, PREDICATE_1, OBJECT_1))
+    assert result is False
+
+    # Add triple
+    result = db.triple_add((SUBJECT_1, PREDICATE_1, OBJECT_1))
+    assert result is True
+
+    # Test if triple is now found
+    result = db.triple_exists((SUBJECT_1, PREDICATE_1, OBJECT_1))
+    assert result is True
+
+    # Test if modified triple is not found
+    result = db.triple_exists((SUBJECT_2, PREDICATE_1, OBJECT_1))
+    assert result is False
+
+    result = db.triple_exists((SUBJECT_1, PREDICATE_2, OBJECT_1))
+    assert result is False
+
+    result = db.triple_exists((SUBJECT_1, PREDICATE_1, OBJECT_2))
+    assert result is False
+
+    # Cleanup
+    result = db.triple_delete((SUBJECT_1, PREDICATE_1, OBJECT_1))
+    assert result is True
+
+
+def test_multi_triple_exists(db: GraphDB):
+    # Test return on empty DB
+    result = db.any_triple_exists(
+        [
+            (SUBJECT_1, PREDICATE_1, OBJECT_1),
+            (SUBJECT_2, PREDICATE_2, OBJECT_2),
+        ]
+    )
+    assert result is False
+
+    result = db.all_triple_exists(
+        [
+            (SUBJECT_1, PREDICATE_1, OBJECT_1),
+            (SUBJECT_2, PREDICATE_2, OBJECT_2),
+        ]
+    )
+    assert result is False
+
+    # Add first and unrelated triple
+    result = db.triples_add(
+        [
+            (SUBJECT_1, PREDICATE_1, OBJECT_1),
+            (NEW_SUBJECT_1, NEW_PREDICATE_1, NEW_OBJECT_1),
+        ]
+    )
+    assert result is True
+
+    # One triple now matches
+    result = db.any_triple_exists(
+        [
+            (SUBJECT_1, PREDICATE_1, OBJECT_1),
+            (SUBJECT_2, PREDICATE_2, OBJECT_2),
+        ]
+    )
+    assert result is True
+
+    result = db.all_triple_exists(
+        [
+            (SUBJECT_1, PREDICATE_1, OBJECT_1),
+            (SUBJECT_2, PREDICATE_2, OBJECT_2),
+        ]
+    )
+    assert result is False
+
+    # Add second triple
+    result = db.triple_add((SUBJECT_2, PREDICATE_2, OBJECT_2))
+    assert result is True
+
+    # One triple now matches
+    result = db.any_triple_exists(
+        [
+            (SUBJECT_1, PREDICATE_1, OBJECT_1),
+            (SUBJECT_2, PREDICATE_2, OBJECT_2),
+        ]
+    )
+    assert result is True
+
+    result = db.all_triple_exists(
+        [
+            (SUBJECT_1, PREDICATE_1, OBJECT_1),
+            (SUBJECT_2, PREDICATE_2, OBJECT_2),
+        ]
+    )
+    assert result is True
+
+    # Cleanup
+    result = db.triples_delete(
+        [
+            (SUBJECT_1, PREDICATE_1, OBJECT_1),
+            (SUBJECT_2, PREDICATE_2, OBJECT_2),
+            (NEW_SUBJECT_1, NEW_PREDICATE_1, NEW_OBJECT_1),
+        ]
+    )
     assert result is True
 
 

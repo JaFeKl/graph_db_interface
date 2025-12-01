@@ -10,6 +10,158 @@ from rdflib import Literal
 import datetime
 
 
+def test_sanitize_triple():
+    triple_three_iri = (
+        IRI("http://example.org#subject"),
+        IRI("http://example.org#predicate"),
+        IRI("http://example.org#object"),
+    )
+    # Must not modify
+    sanitized_triple = utils.sanitize_triple(triple_three_iri)
+    assert sanitized_triple == triple_three_iri
+
+    triple = (
+        "http://example.org#subject",
+        "http://example.org#predicate",
+        "http://example.org#object",
+    )
+    # Must convert first two str to IRI, last to Literal
+    sanitized_triple = utils.sanitize_triple(triple)
+    assert sanitized_triple == triple_three_iri
+
+    triple_iri_literal_string = (
+        IRI("http://example.org#subject"),
+        IRI("http://example.org#predicate"),
+        Literal("literal_object"),
+    )
+    # Must not modify
+    sanitized_triple = utils.sanitize_triple(triple_iri_literal_string)
+    assert sanitized_triple == triple_iri_literal_string
+
+    triple_iri_literal_number = (
+        IRI("http://example.org#subject"),
+        IRI("http://example.org#predicate"),
+        Literal(2.0),
+    )
+    # Must not modify reference triple
+    sanitized_triple = utils.sanitize_triple(triple_iri_literal_number)
+    assert sanitized_triple == triple_iri_literal_number
+
+    triple = (
+        IRI("http://example.org#subject"),
+        IRI("http://example.org#predicate"),
+        2.0,
+    )
+    # Must convert python type to Literal
+    sanitized_triple = utils.sanitize_triple(triple)
+    assert sanitized_triple == triple_iri_literal_number
+
+    triple = (
+        "http://example.org#subject",
+        "http://example.org#predicate",
+        "literal_object",
+    )
+    # Object str cannot be converted to IRI
+    with pytest.raises(InvalidIRIError):
+        utils.sanitize_triple(triple)
+
+    triple = (
+        IRI("http://example.org#subject"),
+        "not_an_iri",
+        IRI("http://example.org#object"),
+    )
+    # second element not convertible to IRI
+    with pytest.raises(InvalidIRIError):
+        utils.sanitize_triple(triple)
+
+    triple = (
+        IRI("http://example.org#subject"),
+        IRI("http://example.org#predicate"),
+    )
+    # only 2 elements
+    with pytest.raises(InvalidInputError):
+        utils.sanitize_triple(triple)
+
+    triple = (
+        Literal("http://example.org#subject"),
+        Literal("http://example.org#predicate"),
+        IRI("http://example.org#object"),
+    )
+    # first two elements are Literals, must be IRIs
+    with pytest.raises(TypeError):
+        utils.sanitize_triple(triple)
+
+
+def test_sanitize_triple_partial():
+    partial_triple_two_iri = (
+        IRI("http://example.org#subject"),
+        None,
+        IRI("http://example.org#object"),
+    )
+    # Must not modify
+    sanitized_triple = utils.sanitize_triple(partial_triple_two_iri, allow_partial=True)
+    assert sanitized_triple == partial_triple_two_iri
+
+    partial_triple_mixed = (
+        "http://example.org#subject",
+        None,
+        IRI("http://example.org#object"),
+    )
+    # Must convert second str to IRI
+    sanitized_triple = utils.sanitize_triple(partial_triple_mixed, allow_partial=True)
+    assert sanitized_triple == partial_triple_two_iri
+
+    partial_triple_iri_literal = (
+        IRI("http://example.org#subject"),
+        None,
+        Literal("literal_string"),
+    )
+    # Must not modify
+    sanitized_triple = utils.sanitize_triple(
+        partial_triple_iri_literal, allow_partial=True
+    )
+    assert sanitized_triple == partial_triple_iri_literal
+
+    partial_triple_iri_literal_number = (
+        IRI("http://example.org#subject"),
+        None,
+        Literal(2.0),
+    )
+    # Must not modify
+    sanitized_triple = utils.sanitize_triple(
+        partial_triple_iri_literal_number, allow_partial=True
+    )
+    assert sanitized_triple == partial_triple_iri_literal_number
+
+    partial_triple_iri_number = (
+        IRI("http://example.org#subject"),
+        None,
+        2.0,
+    )
+    # Must convert python type to Literal
+    sanitized_triple = utils.sanitize_triple(
+        partial_triple_iri_number, allow_partial=True
+    )
+    assert sanitized_triple == partial_triple_iri_literal_number
+
+    partial_triple_mixed = (
+        IRI("http://example.org#subject"),
+        None,
+        "literal_string",
+    )
+    # Object str cannot be converted to IRI
+    with pytest.raises(InvalidIRIError):
+        utils.sanitize_triple(partial_triple_mixed, allow_partial=True)
+
+    partial_triple_invalid = (
+        IRI("http://example.org#subject"),
+        Literal("http://example.org#predicate"),
+        None,
+    )
+    with pytest.raises(TypeError):
+        utils.sanitize_triple(partial_triple_invalid, allow_partial=True)
+
+
 def test_validate_query():
     valid_query = """
     SELECT *

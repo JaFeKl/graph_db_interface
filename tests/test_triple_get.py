@@ -44,6 +44,10 @@ def test_wrong_input(db: GraphDB):
     with pytest.raises(InvalidInputError):
         db.triples_get()
 
+    # Both triple and explicit iri given
+    with pytest.raises(InvalidInputError):
+        db.triples_get((SUBJECT1, PREDICATE1, OBJECT1), sub=SUBJECT1)
+
 
 def test_triple_set_subjects(db: GraphDB):
     # Unenclosed absolute IRI
