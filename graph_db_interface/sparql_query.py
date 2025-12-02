@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Union
 from graph_db_interface.utils import utils
 from graph_db_interface.utils.utils import Triple
 from graph_db_interface.utils.iri import IRI
@@ -30,11 +30,11 @@ class SPARQLQuery:
 
     def __init__(
         self,
-        named_graph: Optional[IRI] = None,
+        named_graph: Optional[Union[str, IRI]] = None,
         include_explicit: Optional[bool] = True,
         include_implicit: Optional[bool] = True,
     ):
-        self._named_graph = named_graph
+        self._named_graph = IRI(named_graph) if named_graph is not None else None
         self._include_explicit = include_explicit
         self._include_implicit = include_implicit
         self._query_blocks = []

@@ -31,6 +31,7 @@ def db() -> GraphDB:
     for graph in [
         None,
         "http://example.org/named_graph",
+        "http://example.org/local_named_graph",
     ]:
         db.clear_graph(graph)
 
