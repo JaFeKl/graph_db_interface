@@ -8,6 +8,7 @@ import logging
 from requests import Response
 from graph_db_interface.utils.graph_db_credentials import GraphDBCredentials
 from graph_db_interface.utils.iri import IRI
+from graph_db_interface.sparql_query import SPARQLQuery
 from graph_db_interface.exceptions import (
     InvalidRepositoryError,
     AuthenticationError,
@@ -280,15 +281,15 @@ class GraphDB:
 
     def query(
         self,
-        query: str,
-        update: bool = False,
+        query: Union[SPARQLQuery, str],
+        update: Optional[bool] = False,
     ) -> Optional[Union[Dict, bool]]:
         """
         Execute a SPARQL query or update against the repository.
 
         Args:
-            query (str): The SPARQL query/update string to execute.
-            update (bool): If True, perform an update; otherwise perform a read query.
+            query (Union[SPARQLQuery, str]): The SPARQL query/update string to execute.
+            update (Optional[bool]): If True, perform an update; otherwise perform a read query.
                 Defaults to False.
 
         Returns:
@@ -297,8 +298,15 @@ class GraphDB:
             failures are handled upstream; otherwise an exception is raised.
 
         Raises:
+            TypeError: If the `query` parameter is neither a `SPARQLQuery` nor a string.
+            InvalidQueryError: If the SPARQL query is malformed.
             GraphDbException: If the HTTP request succeeds but the GraphDB API returns an error status.
         """
+        if isinstance(query, SPARQLQuery):
+            query = query.to_string()
+        elif not isinstance(query, str):
+            raise TypeError("Query must be a SPARQLQuery or a string.")
+
         endpoint = f"repositories/{self._repository}"
         headers = {
             "Content-Type": "application/sparql-query",
