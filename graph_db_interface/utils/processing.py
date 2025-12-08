@@ -1,4 +1,5 @@
 from typing import Optional, Any, Hashable
+from graph_db_interface.utils.utils import convert_multi_bindings_to_python_type
 
 
 def process_bindings_select(
@@ -39,6 +40,7 @@ def process_bindings_select(
         - `variables` and `grouping_variables` are expected without the leading `?`.
         - If neither is provided, `variables` are inferred from the first binding when available.
     """
+    bindings = convert_multi_bindings_to_python_type(bindings)
 
     if not variables and not grouping_variables:
         assert bindings, TypeError(
@@ -50,10 +52,10 @@ def process_bindings_select(
     if not variables:
         extract_entry = lambda binding: None
     elif len(variables) == 1:
-        extract_entry = lambda binding: binding[variables[0]]["value"]
+        extract_entry = lambda binding: binding[variables[0]]
     else:
         extract_entry = lambda binding: tuple(
-            binding[variable]["value"] for variable in variables
+            binding[variable] for variable in variables
         )
 
     if not grouping_variables:
@@ -64,8 +66,7 @@ def process_bindings_select(
             return {}
 
         assert all(
-            isinstance(bindings[0][key]["value"], Hashable)
-            for key in grouping_variables
+            isinstance(bindings[0][key], Hashable) for key in grouping_variables
         ), TypeError("All datatypes in grouping_variables must be hashable.")
 
         result = {}
@@ -74,9 +75,9 @@ def process_bindings_select(
         for binding in bindings:
             leaf = result
             for key in grouping_variables[:-1]:
-                key_value = binding[key]["value"]
+                key_value = binding[key]
                 leaf = leaf.setdefault(key_value, {})
-            key_value = binding[grouping_variables[-1]]["value"]
+            key_value = binding[grouping_variables[-1]]
             leaf.setdefault(key_value, []).append(extract_entry(binding))
             leaf_dicts.append(leaf)
 

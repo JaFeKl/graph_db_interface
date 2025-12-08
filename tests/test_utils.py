@@ -259,16 +259,16 @@ def test_from_xsd_literal():
     assert value == datetime.datetime(2023, 1, 1, 12, 34, 56)
 
 
-def test_convert_query_result_to_python_type():
+def test_convert_binding_to_python_type():
     result_dict = {"type": "uri", "value": "http://example.org#object2"}
     result_dict2 = {
         "datatype": "http://www.w3.org/2001/XMLSchema#double",
         "type": "literal",
         "value": "0.5",
     }
-    converted_result = utils.convert_query_result_to_python_type(result_dict)
+    converted_result = utils.convert_binding_to_python_type(result_dict)
     assert converted_result == "http://example.org#object2"
-    converted_result = utils.convert_query_result_to_python_type(result_dict2)
+    converted_result = utils.convert_binding_to_python_type(result_dict2)
     assert converted_result == 0.5
 
 

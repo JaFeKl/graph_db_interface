@@ -1,13 +1,13 @@
 import logging
 from typing import TypeAlias, Union, Optional, Any, Tuple
-from rdflib import Literal, XSD, Dataset
+from rdflib import Literal, XSD, Dataset, BNode, URIRef
 from rdflib.plugins.sparql.processor import prepareQuery
 from graph_db_interface.exceptions import (
     InvalidInputError,
     InvalidQueryError,
 )
 from graph_db_interface.utils.iri import IRI
-
+from graph_db_interface.utils.typemap import XSDToPythonMapper
 
 LOGGER = logging.getLogger(__name__)
 
@@ -197,11 +197,58 @@ def from_xsd_literal(
     Returns:
         Any: The converted Python value.
     """
-    literal = Literal(value, datatype=datatype)
-    return literal.toPython()
+    return XSDToPythonMapper[URIRef(datatype)](value)
 
 
-def convert_query_result_to_python_type(
+def convert_multi_bindings_to_python_type(
+    bindings: list[dict],
+) -> list[dict]:
+    """
+    Convert SPARQL query result bindings to their corresponding Python types.
+
+    Args:
+        bindings (list[dict]): List of SPARQL query result bindings.
+
+    Returns:
+        list[Any]: List of converted Python values.
+
+    Notes:
+    Bindings are expected in the format
+        [
+            { # binding 1
+                'var1': { 'type': _, 'value': _, 'datatype': _ },
+                'var2': { 'type': _, 'value': _, 'datatype': _ },
+            },
+            { # binding 2
+                'var1': { 'type': _, 'value': _, 'datatype': _ },
+                'var2': { 'type': _, 'value': _, 'datatype': _ },
+            }
+        ]
+    and returned in the format
+        [
+            { # binding 1
+                'var1': _,
+                'var2': _,
+            },
+            { # binding 2
+                'var1': _,
+                'var2': _,
+            }
+        ]
+    """
+    converted_bindings = []
+    for binding in bindings:
+        converted_binding = {}
+        for name, entry in binding.items():
+            if isinstance(entry, dict) and "type" in entry and "value" in entry:
+                converted_binding[name] = convert_binding_to_python_type(entry)
+            else:
+                converted_binding[name] = entry
+        converted_bindings.append(converted_binding)
+    return converted_bindings
+
+
+def convert_binding_to_python_type(
     result_binding: dict,
 ) -> Any:
     """
@@ -216,8 +263,12 @@ def convert_query_result_to_python_type(
     type = result_binding.get("type")
     if type == "literal" and "datatype" in result_binding:
         return from_xsd_literal(result_binding["value"], result_binding["datatype"])
+    elif type == "bnode":
+        return BNode(result_binding["value"])
     elif type == "uri":
-        return IRI(result_binding["value"])
+        # Convert to IRI. if it is a recognized datatype, map to Python type
+        iri = IRI(result_binding["value"])
+        return XSDToPythonMapper.get(iri, iri)
     else:
         # If no datatype is provided, return the value as is
         return result_binding["value"]

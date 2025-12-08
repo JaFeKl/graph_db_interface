@@ -1,6 +1,31 @@
 from __future__ import annotations
 from typing import Any, Optional
 import json
+from graph_db_interface.utils.iri import IRI
+import re
+
+
+def shorten_block(s: str) -> str:
+    """
+    Search a text for IRI patterns with known namespaces and shorten them.
+    """
+    # Pattern to find quoted strings
+    quote_pattern = re.compile(r'"([^"]*)"')
+
+    def replace_iri(match: re.Match) -> str:
+        content = match.group(1)
+        # Skip empty strings
+        if not content:
+            return match.group(0)
+        try:
+            # Try to create an IRI and get its short form
+            shortened = IRI(content).short
+            return f'"{shortened}"'
+        except Exception:
+            # If it's not a valid IRI, return the original match
+            return match.group(0)
+
+    return quote_pattern.sub(replace_iri, s)
 
 
 def format_result(

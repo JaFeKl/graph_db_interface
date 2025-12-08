@@ -14,6 +14,7 @@ from graph_db_interface.exceptions import (
     AuthenticationError,
     GraphDbException,
 )
+from graph_db_interface.utils.utils import convert_multi_bindings_to_python_type
 
 
 class GraphDB:
@@ -283,6 +284,7 @@ class GraphDB:
         self,
         query: Union[SPARQLQuery, str],
         update: Optional[bool] = False,
+        convert_bindings: Optional[bool] = False,
     ) -> Optional[Union[Dict, bool]]:
         """
         Execute a SPARQL query or update against the repository.
@@ -291,6 +293,8 @@ class GraphDB:
             query (Union[SPARQLQuery, str]): The SPARQL query/update string to execute.
             update (Optional[bool]): If True, perform an update; otherwise perform a read query.
                 Defaults to False.
+            convert_bindings (Optional[bool]): Whether to convert query result bindings to Python types.
+                Defaults to True.
 
         Returns:
             Optional[Union[Dict, bool]]: If `update` is False, the parsed JSON result dict.
@@ -331,4 +335,18 @@ class GraphDB:
             f'Query\n"""\n{query}\n"""\nReturned\n{"Update successful (200)" if update else response.json()}'
         )
 
-        return True if update else response.json()
+        if update:
+            return True
+
+        response = response.json()
+
+        if (
+            convert_bindings
+            and "results" in response
+            and "bindings" in response["results"]
+        ):
+            bindings = response["results"]["bindings"]
+            converted_bindings = convert_multi_bindings_to_python_type(bindings)
+            response["results"]["bindings"] = converted_bindings
+
+        return response

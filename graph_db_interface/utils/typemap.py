@@ -1,22 +1,22 @@
 from typing import Any, Callable, Dict, Union
-import decimal
 import datetime
+from rdflib import URIRef
 import rdflib.xsd_datetime
 from rdflib.term import XSDToPython, _XSD_PFX, _RDF_XMLLITERAL
 from graph_db_interface.utils.iri import IRI
 import xml.dom.minidom
 
 # Extends rdflib.term.XSDToPython
-STR_MAP = lambda v: str(v)
-IRI_MAP = lambda v: IRI(v)
 
-XSDToPythonMapper: Dict[IRI, Callable[[str], Any]] = XSDToPython | {
-    IRI("string", _XSD_PFX): STR_MAP,
-    IRI("normalizedString", _XSD_PFX): STR_MAP,
-    IRI("token", _XSD_PFX): STR_MAP,
-    IRI("language", _XSD_PFX): STR_MAP,
-    IRI("anyURI", _XSD_PFX): IRI_MAP,
-    IRI(_RDF_XMLLITERAL): STR_MAP,
+XSDToPythonMapper: Dict[IRI, Callable[[str], Any]] = {
+    **XSDToPython,
+    URIRef(_XSD_PFX + "string"): str,
+    URIRef(_XSD_PFX + "normalizedString"): str,
+    URIRef(_XSD_PFX + "token"): str,
+    URIRef(_XSD_PFX + "language"): str,
+    URIRef(_XSD_PFX + "anyURI"): IRI,
+    URIRef(_XSD_PFX + "decimal"): float,
+    URIRef(_RDF_XMLLITERAL): str,
 }
 
 XSDToPythonTypes: Dict[IRI, type] = {
@@ -36,7 +36,7 @@ XSDToPythonTypes: Dict[IRI, type] = {
     IRI("token", _XSD_PFX): str,
     IRI("language", _XSD_PFX): str,
     IRI("boolean", _XSD_PFX): bool,
-    IRI("decimal", _XSD_PFX): decimal.Decimal,
+    IRI("decimal", _XSD_PFX): float,
     IRI("integer", _XSD_PFX): int,
     IRI("nonPositiveInteger", _XSD_PFX): int,
     IRI("long", _XSD_PFX): int,

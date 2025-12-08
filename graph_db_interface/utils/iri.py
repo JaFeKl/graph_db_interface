@@ -80,7 +80,7 @@ class IRI(URIRef):
         onto, fragment = str(self).rsplit("#", 1)
         if onto in IRI.PREFIXES_INV:
             return f"{IRI.PREFIXES_INV[onto]}:{fragment}"
-        return str(self)
+        return self.n3()
 
     @property
     def lined(self) -> str:
