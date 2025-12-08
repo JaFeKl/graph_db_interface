@@ -307,4 +307,4 @@ def test_short():
     iri3 = IRI("http://unknown.org#Entity")
 
     assert iri1.short == "owl:Class"
-    assert iri3.short == "http://unknown.org#Entity"
+    assert iri3.short == "<http://unknown.org#Entity>"
