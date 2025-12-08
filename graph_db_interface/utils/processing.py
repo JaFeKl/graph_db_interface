@@ -60,6 +60,9 @@ def process_bindings_select(
         return tuple(extract_entry(binding) for binding in bindings)
 
     else:  # Process with grouping variables
+        if not bindings:
+            return {}
+
         assert all(
             isinstance(bindings[0][key]["value"], Hashable)
             for key in grouping_variables

@@ -19,7 +19,7 @@ XSDToPythonMapper: Dict[IRI, Callable[[str], Any]] = XSDToPython | {
     IRI(_RDF_XMLLITERAL): STR_MAP,
 }
 
-XSDToPythonTypes: Dict[IRI, Any] = {
+XSDToPythonTypes: Dict[IRI, type] = {
     IRI("time", _XSD_PFX): datetime.time,
     IRI("date", _XSD_PFX): datetime.date,
     IRI("gYear", _XSD_PFX): datetime.date,

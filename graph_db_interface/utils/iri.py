@@ -6,6 +6,7 @@ from typing import Optional, Any, Dict
 from rdflib import URIRef, Literal
 from pydantic import GetCoreSchemaHandler
 from pydantic_core import CoreSchema, core_schema
+import regex as re
 
 
 class IRI(URIRef):
@@ -34,6 +35,7 @@ class IRI(URIRef):
         "owl": "http://www.w3.org/2002/07/owl",
         "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns",
         "rdfs": "http://www.w3.org/2000/01/rdf-schema",
+        "xsd": "http://www.w3.org/2001/XMLSchema",
         "kafka": "http://www.ontotext.com/connectors/kafka",
         "kafka-inst": "http://www.ontotext.com/connectors/kafka/instance",
     }
@@ -67,9 +69,8 @@ class IRI(URIRef):
         iri = IRI._sanitize(value, base, prefixes)
         return super().__new__(cls, iri)
 
-    def short(
-        self,
-    ) -> str:
+    @property
+    def short(self) -> str:
         """
         Return a prefixed form if the base is registered.
 
@@ -80,6 +81,26 @@ class IRI(URIRef):
         if onto in IRI.PREFIXES_INV:
             return f"{IRI.PREFIXES_INV[onto]}:{fragment}"
         return str(self)
+
+    @property
+    def lined(self) -> str:
+        """
+        Return a version of the iri with symbols ".:/#" replaced by "_"
+
+        Returns:
+            str: Cleaned up name
+        """
+        return "_".join(filter(None, re.split("\.|:|/|#", self)))
+
+    @property
+    def onto(self) -> str:
+        """
+        Return the ontology/base part of the IRI (before the '#').
+
+        Returns:
+            str: The base IRI.
+        """
+        return str(self).rsplit("#", 1)[0]
 
     def __hash__(self) -> int:
         """
