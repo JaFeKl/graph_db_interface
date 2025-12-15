@@ -161,6 +161,14 @@ def test_sanitize_triple_partial():
     with pytest.raises(TypeError):
         utils.sanitize_triple(partial_triple_invalid, allow_partial=True)
 
+    partial_triple_two_entries = (
+        IRI("http://example.org#subject"),
+        IRI("http://example.org#predicate"),
+    )
+    # only 2 elements
+    with pytest.raises(InvalidInputError):
+        utils.sanitize_triple(partial_triple_two_entries)
+
 
 def test_validate_query():
     valid_query = """
