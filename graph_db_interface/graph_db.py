@@ -41,6 +41,7 @@ class GraphDB:
         self._credentials = credentials
         self._timeout = timeout
         self._auth = None
+        self._blank_ids = set()
 
         if use_gdb_token:
             self._auth = self._get_authentication_token(
@@ -101,6 +102,8 @@ class GraphDB:
     )
     from graph_db_interface.queries.ontology_helpers import (
         iri_exists,
+        new_iri,
+        new_blank_id,
         is_subclass,
         owl_is_named_individual,
         owl_get_classes_of_individual,

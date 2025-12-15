@@ -1,6 +1,7 @@
 # To be imported into ..graph_db.py GraphDB class
+import uuid
 
-from typing import List, Optional, Union, TYPE_CHECKING
+from typing import List, Optional, Union, Callable, TYPE_CHECKING
 from graph_db_interface.utils import utils
 from graph_db_interface.utils.iri import IRI
 from graph_db_interface.exceptions import InvalidInputError
@@ -72,6 +73,61 @@ def iri_exists(
 
     self.logger.debug(f"Unable to find IRI {iri}")
     return False
+
+
+def new_iri(
+    self: "GraphDB",
+    base: Union[str, IRI],
+    schema: Optional[Callable[[], str]] = lambda: str(uuid.uuid4()),
+) -> IRI:
+    """
+    Generate a new unique IRI within the graph database's namespace.
+
+    Args:
+        base (Union[str, IRI]): The base IRI or namespace for the new IRI.
+        schema (Optional[Callable[[], str]]): A callable that generates the unique part
+            of the IRI. Defaults to a UUID4 string generator.
+
+    Returns:
+        IRI: A new unique IRI.
+    """
+    if schema() == schema():
+        raise ValueError("Schema function must produce different values on each call")
+
+    def new() -> str:
+        return IRI(value=schema(), base=base)
+
+    iri = new()
+
+    while self.iri_exists(iri, as_sub=True, as_pred=True, as_obj=True):
+        iri = new()
+    return iri
+
+
+def new_blank_id(
+    self: "GraphDB",
+    schema: Optional[Callable[[], str]] = lambda: f"genid-{uuid.uuid4()}",
+) -> str:
+    """
+    Generate a new unique blank node identifier.
+
+    Args:
+        schema (Optional[Callable[[], str]]): A callable that generates the blank node ID.
+            Defaults to a `genid-<uuid4>` format.
+
+    Returns:
+        str: A new unique blank node identifier.
+    """
+    if schema() == schema():
+        raise ValueError("Schema function must produce different values on each call")
+
+    genid = schema()
+
+    while genid in self._blank_ids:
+        genid = schema()
+
+    self._blank_ids.add(genid)
+    return genid
 
 
 def is_subclass(

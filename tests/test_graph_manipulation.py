@@ -1,8 +1,10 @@
+import random
 import pytest
 from rdflib import Literal, XSD
 from graph_db_interface import GraphDB
 from graph_db_interface.exceptions import InvalidInputError
 from graph_db_interface.utils import utils
+from graph_db_interface.utils.iri import IRI
 
 GLOBAL_NAMED_GRAPH = "http://example.org/named_graph"
 LOCAL_NAMED_GRAPH = "http://example.org/local_named_graph"
@@ -599,3 +601,68 @@ def test_convenience_functions(db: GraphDB, named_graph: str):
         named_graph=named_graph,
     )
     assert result is True
+
+
+def test_iri_generation(db: GraphDB, named_graph: str):
+    valid_schema = lambda: str(random.randint(0, 1000000))
+    invalid_schema = lambda: "fixed"
+
+    # Generate a new IRI
+    iri1 = db.new_iri(
+        base="http://example.org",
+    )
+    assert isinstance(iri1, IRI)
+    assert iri1.onto == "http://example.org"
+
+    # Ensure uniqueness
+    iri2 = db.new_iri(
+        base="http://example.org",
+    )
+    assert iri1 != iri2
+
+    # Generate with schema
+    iri3 = db.new_iri(
+        base="http://example.org",
+        schema=valid_schema,
+    )
+    assert isinstance(iri3, IRI)
+    assert iri3.onto == "http://example.org"
+    assert iri1 != iri3
+
+    iri4 = db.new_iri(
+        base="http://example.org",
+        schema=valid_schema,
+    )
+    assert iri3 != iri4
+
+    # Invalid schema that does not produce unique IRIs
+    with pytest.raises(ValueError):
+        db.new_iri(
+            base="http://example.org",
+            schema=invalid_schema,
+        )
+
+    # Generate blank node IDs
+    genid1 = db.new_blank_id()
+    assert isinstance(genid1, str)
+
+    genid2 = db.new_blank_id()
+    assert genid1 != genid2
+
+    # Generate with schema
+    genid3 = db.new_blank_id(
+        schema=valid_schema,
+    )
+    assert isinstance(genid3, str)
+    assert genid1 != genid3
+
+    genid4 = db.new_blank_id(
+        schema=valid_schema,
+    )
+    assert genid3 != genid4
+
+    # Invalid schema that does not produce unique blank IDs
+    with pytest.raises(ValueError):
+        db.new_blank_id(
+            schema=invalid_schema,
+        )
