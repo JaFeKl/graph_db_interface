@@ -39,6 +39,22 @@ class SPARQLQuery:
         self._include_implicit = include_implicit
         self._query_blocks = []
 
+    @classmethod
+    def select(
+        cls,
+        variables: List[str],
+        where_clauses: List[str],
+        select_type: Optional[SPARQLQueryType] = SPARQLQueryType.SELECT,
+        **kwargs,
+    ) -> "SPARQLQuery":
+        """
+        Create a new SPARQLQuery instance with a SELECT block.
+        Refer to `add_select_block` for details.
+        """
+        query = cls(**kwargs)
+        query.add_select_block(variables, where_clauses, select_type)
+        return query
+
     def add_select_block(
         self,
         variables: List[str],
@@ -66,6 +82,20 @@ class SPARQLQuery:
         block = "\n".join(block_parts)
         self._query_blocks.append({"type": select_type, "data": block})
 
+    @classmethod
+    def ask(
+        cls,
+        where_clauses: List[str],
+        **kwargs,
+    ) -> "SPARQLQuery":
+        """
+        Create a new SPARQLQuery instance with a ASK block.
+        Refer to `add_ask_block` for details.
+        """
+        query = cls(**kwargs)
+        query.add_ask_block(where_clauses)
+        return query
+
     def add_ask_block(
         self,
         where_clauses: List[str],
@@ -91,6 +121,20 @@ WHERE {{
         block = "\n".join(block_parts)
         self._query_blocks.append({"type": SPARQLQueryType.ASK, "data": block})
 
+    @classmethod
+    def insert_data(
+        cls,
+        triples: List[Triple],
+        **kwargs,
+    ) -> "SPARQLQuery":
+        """
+        Create a new SPARQLQuery instance with an INSERT DATA block.
+        Refer to `add_insert_data_block` for details.
+        """
+        query = cls(**kwargs)
+        query.add_insert_data_block(triples)
+        return query
+
     def add_insert_data_block(
         self,
         triples: List[Triple],
@@ -114,6 +158,20 @@ WHERE {{
         )
         block = "\n".join(block_parts)
         self._query_blocks.append({"type": SPARQLQueryType.INSERT_DATA, "data": block})
+
+    @classmethod
+    def insert_exists(
+        cls,
+        triples: List[Triple],
+        **kwargs,
+    ) -> "SPARQLQuery":
+        """
+        Create a new SPARQLQuery instance with an INSERT ... WHERE NOT EXISTS block.
+        Refer to `add_insert_exists_block` for details.
+        """
+        query = cls(**kwargs)
+        query.add_insert_exists_block(triples)
+        return query
 
     def add_insert_exists_block(
         self,
@@ -144,6 +202,20 @@ WHERE {{ FILTER NOT EXISTS {{
             {"type": SPARQLQueryType.INSERT_EXISTS, "data": block}
         )
 
+    @classmethod
+    def delete_data(
+        cls,
+        triples: List[Triple],
+        **kwargs,
+    ) -> "SPARQLQuery":
+        """
+        Create a new SPARQLQuery instance with a DELETE DATA block.
+        Refer to `add_delete_data_block` for details.
+        """
+        query = cls(**kwargs)
+        query.add_delete_data_block(triples)
+        return query
+
     def add_delete_data_block(
         self,
         triples: List[Triple],
@@ -167,6 +239,26 @@ WHERE {{ FILTER NOT EXISTS {{
         )
         block = "\n".join(block_parts)
         self._query_blocks.append({"type": SPARQLQueryType.DELETE_DATA, "data": block})
+
+    @classmethod
+    def delete_insert_data(
+        cls,
+        delete_triples: List[Triple],
+        insert_triples: List[Triple],
+        where_clauses: List[str],
+        **kwargs,
+    ) -> "SPARQLQuery":
+        """
+        Create a new SPARQLQuery instance with a DELETE DATA block.
+        Refer to `add_delete_insert_data_block` for details.
+        """
+        query = cls(**kwargs)
+        query.add_delete_insert_data_block(
+            delete_triples,
+            insert_triples,
+            where_clauses,
+        )
+        return query
 
     def add_delete_insert_data_block(
         self,

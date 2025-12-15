@@ -58,22 +58,14 @@ def iri_exists(
         where_clauses.append(f"{{?s {iri.n3()} ?o . }}")
     if as_obj:
         where_clauses.append(f"{{?s ?p {iri.n3()} . }}")
-    query = SPARQLQuery(
+
+    query = SPARQLQuery.ask(
+        where_clauses=where_clauses,
         named_graph=named_graph,
         include_explicit=include_explicit,
         include_implicit=include_implicit,
     )
-
-    query.add_ask_block(
-        where_clauses=where_clauses,
-    )
-
-    query_string = query.to_string(validate=True)
-
-    result = self.query(
-        query=query_string,
-        update=False,
-    )
+    result = self.query(query=query, update=False)
     if result is not None and result["boolean"]:
         self.logger.debug(f"Found IRI {iri}")
         return True
@@ -177,24 +169,18 @@ def owl_get_classes_of_individual(
     else:
         filter_conditions = ""
 
-    query = SPARQLQuery(
-        named_graph=named_graph,
-        include_explicit=include_explicit,
-        include_implicit=include_implicit,
-    )
-
-    query.add_select_block(
+    query = SPARQLQuery.select(
         variables=["?class"],
         where_clauses=[
             f"?class rdf:type owl:Class .",
             f"{instance_iri.n3()} rdf:type ?class .",
             filter_conditions,
         ],
+        named_graph=named_graph,
+        include_explicit=include_explicit,
+        include_implicit=include_implicit,
     )
-
-    query_string = query.to_string(validate=True)
-
-    results = self.query(query=query_string)
+    results = self.query(query=query)
 
     if results is None:
         return []

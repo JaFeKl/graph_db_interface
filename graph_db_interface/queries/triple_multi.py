@@ -81,23 +81,14 @@ def triples_get(
     if obj is not None:
         _append_bind_and_filter("?o", obj)
 
-    query = SPARQLQuery(
+    query = SPARQLQuery.select(
+        variables=["?s", "?p", "?o"],
+        where_clauses=binds + ["?s ?p ?o ."] + filter,
         named_graph=named_graph,
         include_explicit=include_explicit,
         include_implicit=include_implicit,
     )
-    query.add_select_block(
-        variables=["?s", "?p", "?o"],
-        where_clauses=binds + ["?s ?p ?o ."] + filter,
-    )
-    query_string = query.to_string(validate=True)
-    if query_string is None:
-        self.logger.error(
-            "Unable to construct SPARQL query, returning empty list of triples"
-        )
-        return []
-
-    results = self.query(query=query_string)
+    results = self.query(query=query)
     converted_results = [
         (
             (
@@ -185,15 +176,11 @@ def all_triple_exists(
         triple = utils.sanitize_triple(triple)
         triple_strings.append(utils.triple_to_string(triple, "."))
 
-    query = SPARQLQuery(named_graph=named_graph)
-    query.add_ask_block(where_clauses=triple_strings)
-    query_string = query.to_string()
-    if not query_string:
-        raise InvalidInputError(
-            f"Could not generate 'all_triple_exists' query for triples ({triple_strings}), named_graph: {named_graph or "default"}, repository: {self._repository}"
-        )
-
-    ask_result = self.query(query=query_string, update=False)
+    query = SPARQLQuery.ask(
+        where_clauses=triple_strings,
+        named_graph=named_graph,
+    )
+    ask_result = self.query(query=query, update=False)
     if ask_result is None:
         raise InvalidInputError(
             f"Could not query 'all_triple_exists' for triples ({triple_strings}), named_graph: {named_graph or "default"}, repository: {self._repository}"
@@ -249,17 +236,11 @@ def triples_add(
         utils.triple_to_string(triple, ".") for triple in validated_triples_to_add
     ]
 
-    query = SPARQLQuery(named_graph=named_graph)
-    query.add_insert_data_block(
+    query = SPARQLQuery.insert_data(
         triples=validated_triples_to_add,
+        named_graph=named_graph,
     )
-    query_string = query.to_string()
-    if not query_string:
-        raise InvalidInputError(
-            f"Could not generate 'triples_add' query for triples ({triple_strings}), named_graph: {named_graph or "default"}, repository: {self._repository}"
-        )
-
-    result = self.query(query=query_string, update=True)
+    result = self.query(query=query, update=True)
     if not result:
         self.logger.warning(
             f"Failed to add triples: ({triple_strings}), named_graph: {named_graph or "default"}, repository: {self._repository}"
@@ -310,17 +291,11 @@ def triples_delete(
         utils.triple_to_string(triple, ".") for triple in validated_triples_to_delete
     ]
 
-    query = SPARQLQuery(named_graph=named_graph)
-    query.add_delete_data_block(
+    query = SPARQLQuery.delete_data(
         triples=validated_triples_to_delete,
+        named_graph=named_graph,
     )
-    query_string = query.to_string()
-    if not query_string:
-        raise InvalidInputError(
-            f"Could not generate 'triples_delete' query for triples ({triple_strings}), named_graph: {named_graph or "default"}, repository: {self._repository}"
-        )
-
-    result = self.query(query=query_string, update=True)
+    result = self.query(query=query, update=True)
     if not result:
         self.logger.warning(
             f"Failed to delete triples: ({triple_strings}), named_graph: {named_graph or "default"}, repository: {self._repository}"
@@ -375,19 +350,13 @@ def triples_update(
         utils.triple_to_string(triple, ".") for triple in validated_old_triples
     ]
 
-    query = SPARQLQuery(named_graph=named_graph)
-    query.add_delete_insert_data_block(
+    query = SPARQLQuery.delete_insert_data(
         delete_triples=validated_old_triples,
         insert_triples=validated_new_triples,
         where_clauses=old_triple_strings,
+        named_graph=named_graph,
     )
-    query_string = query.to_string(validate=True)
-    if not query_string:
-        raise InvalidInputError(
-            f"Could not generate 'triples_update' query for triples ({validated_old_triples}) -> ({validated_new_triples}), named_graph: {named_graph or "default"}, repository: {self._repository}"
-        )
-
-    result = self.query(query=query_string, update=True)
+    result = self.query(query=query, update=True)
     if not result:
         self.logger.warning(
             f"Failed to update triples ({validated_old_triples}) -> ({validated_new_triples}), named_graph: {named_graph or "default"}, repository: {self._repository}"

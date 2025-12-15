@@ -38,13 +38,12 @@ class KafkaManager:
         Raises:
             GraphDbException: If the underlying query execution fails.
         """
-        query = SPARQLQuery(prefixes=self.db.get_prefixes())
-        query.add_select_block(
+        query = SPARQLQuery.select(
             variables=["?cntUri", "?cntStr"],
             where_clauses=["?cntUri kafka:listConnectors ?cntStr ."],
+            prefixes=self.db.get_prefixes(),
         )
-        query_string = query.to_string(validate=True)
-        results = self.db.query(query=query_string)
+        results = self.db.query(query=query)
         return [res["cntStr"]["value"] for res in results["results"]["bindings"]]
 
     def get_status_of_connectors(
@@ -66,8 +65,7 @@ class KafkaManager:
         Raises:
             GraphDbException: If the underlying query execution fails.
         """
-        query = SPARQLQuery(prefixes=self.db.get_prefixes())
-        query.add_select_block(
+        query = SPARQLQuery.select(
             variables=["?cntUri", "?cntStr", "?cntStatus"],
             where_clauses=(
                 ["?cntUri kafka:listConnectors ?cntStr ."]
@@ -75,9 +73,9 @@ class KafkaManager:
                 if id is None
                 else [f"kafka-inst:{id} kafka:connectorStatus ?cntStatus ."]
             ),
+            prefixes=self.db.get_prefixes(),
         )
-        query_string = query.to_string(validate=True)
-        results = self.db.query(query=query_string)
+        results = self.db.query(query=query)
         if results["results"]["bindings"]:
             return {
                 res["cntStr"]["value"]: res["cntStatus"]["value"]
@@ -105,13 +103,12 @@ class KafkaManager:
         Raises:
             GraphDbException: If the underlying query execution fails.
         """
-        query = SPARQLQuery(prefixes=self.db.get_prefixes())
-        query.add_select_block(
+        query = SPARQLQuery.select(
             variables=["?createString"],
             where_clauses=[f"kafka-inst:{id} kafka:listOptionValues ?createString ."],
+            prefixes=self.db.get_prefixes(),
         )
-        query_string = query.to_string(validate=True)
-        results = self.db.query(query=query_string)
+        results = self.db.query(query=query)
         if results["results"]["bindings"]:
             return results["results"]["bindings"][0]["createString"]["value"]
         return None
@@ -129,15 +126,14 @@ class KafkaManager:
         Returns:
             bool: True on success, False otherwise.
         """
-        query = SPARQLQuery(prefixes=self.db.get_prefixes())
-        query.add_insert_data_block(
+        query = SPARQLQuery.insert_data(
             triples=[
                 (f"kafka-inst:{id}", "kafka:dropConnector", "[]"),
-            ]
+            ],
+            prefixes=self.db.get_prefixes(),
         )
-        query_string = query.to_string(validate=False)
         try:
-            self.db.query(query=query_string, update=True)
+            self.db.query(query=query, update=True)
             self.logger.info(f"Dropped Kafka connector with ID: {id}")
             return True
         except Exception as e:
@@ -166,19 +162,18 @@ class KafkaManager:
         if overwrite and id in self.get_existing_connector_ids():
             self.drop_connector(id)
 
-        query = SPARQLQuery(prefixes=self.db.get_prefixes())
-        query.add_insert_data_block(
+        query = SPARQLQuery.insert_data(
             triples=[
                 (
                     f"kafka-inst:{id}",
                     "kafka:createConnector",
                     f"'''{json.dumps(connector_config, indent=2)}'''",
                 ),
-            ]
+            ],
+            prefixes=self.db.get_prefixes(),
         )
-        query_string = query.to_string(validate=False)
         try:
-            self.db.query(query=query_string, update=True)
+            self.db.query(query=query, update=True)
             self.logger.info(f"Created Kafka connector with ID: {id}")
         except Exception as e:
             self.logger.error(

@@ -33,15 +33,13 @@ def triple_exists(
     triple = utils.sanitize_triple(triple)
     named_graph = IRI(named_graph) if named_graph is not None else self.named_graph
 
-    query = SPARQLQuery(named_graph=named_graph)
-    query.add_ask_block(
+    query = SPARQLQuery.ask(
         where_clauses=[
             utils.triple_to_string(triple, "."),
         ],
+        named_graph=named_graph,
     )
-    query_string = query.to_string()
-
-    result = self.query(query=query_string)
+    result = self.query(query=query)
     if result is None or result["boolean"] is False:
         self.logger.debug(
             f"Unable to find triple ({utils.triple_to_string(triple)}), named_graph: {named_graph or "default"}, repository: {self._repository}"
@@ -72,15 +70,11 @@ def triple_add(
     triple = utils.sanitize_triple(triple)
     named_graph = IRI(named_graph) if named_graph is not None else self.named_graph
 
-    query = SPARQLQuery(named_graph=named_graph)
-    query.add_insert_data_block(
+    query = SPARQLQuery.insert_data(
         triples=[triple],
+        named_graph=named_graph,
     )
-    query_string = query.to_string()
-    if query_string is None:
-        return False
-
-    result = self.query(query=query_string, update=True)
+    result = self.query(query=query, update=True)
     if not result:
         self.logger.warning(
             f"Failed to insert triple: ({utils.triple_to_string(triple)}) named_graph: {named_graph or "default"}, repository: {self._repository}"
@@ -122,16 +116,12 @@ def triple_delete(
         if not self.triple_exists(triple, named_graph=named_graph):
             self.logger.warning("Unable to delete triple since it does not exist")
             return False
-    query = SPARQLQuery(named_graph=named_graph)
-    query.add_delete_data_block(
+
+    query = SPARQLQuery.delete_data(
         triples=[triple],
+        named_graph=named_graph,
     )
-    query_string = query.to_string()
-
-    if query_string is None:
-        return False
-
-    result = self.query(query=query_string, update=True)
+    result = self.query(query=query, update=True)
     if not result:
         self.logger.warning(
             f"Failed to delete triple: ({utils.triple_to_string(triple)}), named_graph: {named_graph or "default"}, repository: {self._repository}"
@@ -201,17 +191,13 @@ def triple_update(
     # Determine replacement variables
     update_triple = tuple(n if n else o for o, n in zip(old_triple, new_triple))
 
-    query = SPARQLQuery(named_graph=named_graph)
-    query.add_delete_insert_data_block(
+    query = SPARQLQuery.delete_insert_data(
         delete_triples=[old_triple],
         insert_triples=[update_triple],
         where_clauses=[utils.triple_to_string(old_triple, ".")],
+        named_graph=named_graph,
     )
-    query_string = query.to_string(validate=True)
-    if query_string is None:
-        return False
-
-    result = self.query(query=query_string, update=True)
+    result = self.query(query=query, update=True)
     if not result:
         self.logger.warning(
             f"Failed to update triple to: ({utils.triple_to_string(update_triple)}), named_graph: {named_graph or "default"}, repository: {self._repository}"
