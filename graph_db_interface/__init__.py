@@ -6,6 +6,7 @@ from .utils.utils import to_literal
 from .utils.processing import process_bindings_select
 from .utils.pretty_print import format_result
 from .kafka.kafka_manager import KafkaManager
+from .utils.typemap import XSDToPythonTypes, XSDToPythonMapper
 
 __all__ = [
     "GraphDB",
@@ -16,4 +17,6 @@ __all__ = [
     "process_bindings_select",
     "format_result",
     "KafkaManager",
+    "XSDToPythonTypes",
+    "XSDToPythonMapper",
 ]
