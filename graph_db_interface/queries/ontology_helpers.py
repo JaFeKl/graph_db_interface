@@ -242,19 +242,17 @@ def owl_get_classes_of_individual(
         include_explicit=include_explicit,
         include_implicit=include_implicit,
     )
-    results = self.query(query=query)
+    results = self.query(query=query, convert_bindings=True)
 
     if results is None:
         return []
 
     if local_name:
         classes = [
-            utils.get_local_name(result["class"]["value"])
+            utils.get_local_name(result["class"])
             for result in results["results"]["bindings"]
         ]
         return classes
 
-    classes = [
-        IRI(result["class"]["value"]) for result in results["results"]["bindings"]
-    ]
+    classes = [result["class"] for result in results["results"]["bindings"]]
     return classes

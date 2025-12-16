@@ -27,9 +27,7 @@ SELECT DISTINCT ?graph WHERE {
     GRAPH ?graph { ?s ?p ?o }
 }
     """
-    results = self.query(query)
-
+    results = self.query(query, convert_bindings=True)
     if results is None:
         return []
-
-    return [IRI(result["graph"]["value"]) for result in results["results"]["bindings"]]
+    return [result["graph"] for result in results["results"]["bindings"]]

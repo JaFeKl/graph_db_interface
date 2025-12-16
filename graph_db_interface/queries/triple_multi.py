@@ -88,31 +88,13 @@ def triples_get(
         include_explicit=include_explicit,
         include_implicit=include_implicit,
     )
-    results = self.query(query=query)
+    results = self.query(query=query, convert_bindings=True)
+
     converted_results = [
-        (
-            (
-                IRI(result["s"]["value"])
-                if result["s"]["type"] == "uri"
-                else (
-                    BNode(result["s"]["value"])
-                    if result["s"]["type"] == "bnode"
-                    else None
-                )
-            ),
-            (
-                IRI(result["p"]["value"])
-                if result["p"]["type"] == "uri"
-                else (
-                    BNode(result["p"]["value"])
-                    if result["p"]["type"] == "bnode"
-                    else None
-                )
-            ),
-            utils.convert_binding_to_python_type(result["o"]),
-        )
+        (result["s"], result["p"], result["o"])
         for result in results["results"]["bindings"]
     ]
+
     return converted_results
 
 
