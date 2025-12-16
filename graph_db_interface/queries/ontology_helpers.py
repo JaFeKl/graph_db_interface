@@ -94,8 +94,14 @@ def new_iri(
     if schema() == schema():
         raise ValueError("Schema function must produce different values on each call")
 
+    base = base.rstrip("#")
+    if "#" in base:
+        base, fragment_start = base.split("#", 1)
+    else:
+        fragment_start = ""
+
     def new() -> str:
-        return IRI(value=schema(), base=base)
+        return IRI(value=fragment_start + schema(), base=base)
 
     iri = new()
 

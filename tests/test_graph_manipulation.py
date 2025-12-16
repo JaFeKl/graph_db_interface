@@ -620,20 +620,34 @@ def test_iri_generation(db: GraphDB, named_graph: str):
     )
     assert iri1 != iri2
 
-    # Generate with schema
+    # Generate with fragment base
     iri3 = db.new_iri(
-        base="http://example.org",
-        schema=valid_schema,
+        base="http://example.org#ClassName_",
     )
     assert isinstance(iri3, IRI)
     assert iri3.onto == "http://example.org"
-    assert iri1 != iri3
+    assert iri3.fragment.startswith("ClassName_")
 
+    # Ensure uniqueness
     iri4 = db.new_iri(
+        base="http://example.org#ClassName_",
+    )
+    assert iri3 != iri4
+
+    # Generate with schema
+    iri5 = db.new_iri(
         base="http://example.org",
         schema=valid_schema,
     )
-    assert iri3 != iri4
+    assert isinstance(iri5, IRI)
+    assert iri5.onto == "http://example.org"
+    assert iri1 != iri5
+
+    iri6 = db.new_iri(
+        base="http://example.org",
+        schema=valid_schema,
+    )
+    assert iri5 != iri6
 
     # Invalid schema that does not produce unique IRIs
     with pytest.raises(ValueError):
