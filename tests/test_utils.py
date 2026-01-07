@@ -278,6 +278,7 @@ def test_convert_binding_to_python_type():
     assert converted_result == "http://example.org#object2"
     converted_result = utils.convert_binding_to_python_type(result_dict2)
     assert converted_result == 0.5
+    # TODO add more test cases here to catch last modification
 
 
 def test_get_local_name():

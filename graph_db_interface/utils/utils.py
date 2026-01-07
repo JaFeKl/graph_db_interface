@@ -7,7 +7,7 @@ from graph_db_interface.exceptions import (
     InvalidQueryError,
 )
 from graph_db_interface.utils.iri import IRI
-from graph_db_interface.utils.typemap import XSDToPythonMapper
+from graph_db_interface.utils.typemap import XSDToPythonMapper, XSDToPythonTypes
 
 LOGGER = logging.getLogger(__name__)
 
@@ -268,7 +268,7 @@ def convert_binding_to_python_type(
     elif type == "uri":
         # Convert to IRI. if it is a recognized datatype, map to Python type
         iri = IRI(result_binding["value"])
-        return XSDToPythonMapper.get(iri, iri)
+        return XSDToPythonTypes.get(iri, iri)
     else:
         # If no datatype is provided, return the value as is
         return result_binding["value"]
