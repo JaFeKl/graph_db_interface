@@ -4,6 +4,7 @@ import uuid
 from typing import List, Optional, Union, Callable, TYPE_CHECKING
 from graph_db_interface.utils import utils
 from graph_db_interface.utils.iri import IRI
+from graph_db_interface.utils.types import IRILike, GraphNameLike
 from graph_db_interface.exceptions import InvalidInputError
 from rdflib import Namespace
 
@@ -15,25 +16,25 @@ if TYPE_CHECKING:
 
 def iri_exists(
     self: "GraphDB",
-    iri: Union[str, IRI],
+    iri: IRILike,
     as_sub: Optional[bool] = False,
     as_pred: Optional[bool] = False,
     as_obj: Optional[bool] = False,
     include_explicit: Optional[bool] = True,
     include_implicit: Optional[bool] = True,
-    named_graph: Optional[Union[str, IRI]] = None,
+    named_graph: Optional[GraphNameLike] = None,
 ) -> bool:
     """
     Check if an IRI exists as subject, predicate, or object.
 
     Args:
-        iri (Union[str, IRI]): The IRI to check for existence.
+        iri (IRILike): The IRI to check for existence.
         as_sub (Optional[bool]): If True, check existence as subject. Defaults to False.
         as_pred (Optional[bool]): If True, check existence as predicate. Defaults to False.
         as_obj (Optional[bool]): If True, check existence as object. Defaults to False.
         include_explicit (Optional[bool]): Include explicit triples (`FROM onto:explicit`). Defaults to True.
         include_implicit (Optional[bool]): Include inferred triples (`FROM onto:implicit`). Defaults to True.
-        named_graph (Optional[Union[str, IRI]]): Override the client's default named graph.
+        named_graph (Optional[GraphNameLike]): Override the client's default named graph.
 
     Returns:
         bool: True if the IRI exists based on the specified criteria, False otherwise.
@@ -77,14 +78,14 @@ def iri_exists(
 
 def new_iri(
     self: "GraphDB",
-    base: Union[str, IRI],
+    base: IRILike,
     schema: Optional[Callable[[], str]] = lambda: str(uuid.uuid4()),
 ) -> IRI:
     """
     Generate a new unique IRI within the graph database's namespace.
 
     Args:
-        base (Union[str, IRI]): The base IRI or namespace for the new IRI.
+        base (IRILike): The base IRI or namespace for the new IRI.
         schema (Optional[Callable[[], str]]): A callable that generates the unique part
             of the IRI. Defaults to a UUID4 string generator.
 
@@ -138,9 +139,9 @@ def new_blank_id(
 
 def is_subclass(
     self: "GraphDB",
-    subclass_iri: Union[str, IRI],
-    class_iri: Union[str, IRI],
-    named_graph: Optional[Union[str, IRI]] = None,
+    subclass_iri: IRILike,
+    class_iri: IRILike,
+    named_graph: Optional[GraphNameLike] = None,
 ) -> bool:
     """
     Check whether one class is a subclass of another (`rdfs:subClassOf`).
@@ -148,9 +149,9 @@ def is_subclass(
     Asks for `subclass_iri rdfs:subClassOf class_iri`
 
     Args:
-        subclass_iri (Union[str, IRI]): The IRI of the potential subclass.
-        class_iri (Union[str, IRI]): The IRI of the potential superclass.
-        named_graph (Optional[Union[str, IRI]]): Override the client's default named graph.
+        subclass_iri (IRILike): The IRI of the potential subclass.
+        class_iri (IRILike): The IRI of the potential superclass.
+        named_graph (Optional[GraphNameLike]): Override the client's default named graph.
 
     Returns:
         bool: True if `subclass_iri` is a subclass of `class_iri`, False otherwise.
@@ -163,8 +164,8 @@ def is_subclass(
 
 def owl_is_named_individual(
     self: "GraphDB",
-    iri: Union[str, IRI],
-    named_graph: Optional[Union[str, IRI]] = None,
+    iri: IRILike,
+    named_graph: Optional[GraphNameLike] = None,
 ) -> bool:
     """
     Check if the given IRI corresponds to an OWL named individual.
@@ -172,8 +173,8 @@ def owl_is_named_individual(
     Asks for `iri rdf:type owl:NamedIndividual`.
 
     Args:
-        iri (Union[str, IRI]): The IRI to check.
-        named_graph (Optional[Union[str, IRI]]): Override the client's default named graph.
+        iri (IRILike): The IRI to check.
+        named_graph (Optional[GraphNameLike]): Override the client's default named graph.
 
     Returns:
         bool: True if the IRI is a named individual, False otherwise.
@@ -186,12 +187,12 @@ def owl_is_named_individual(
 
 def owl_get_classes_of_individual(
     self: "GraphDB",
-    instance_iri: Union[str, IRI],
+    instance_iri: IRILike,
     ignored_prefixes: Optional[List[Namespace]] = None,
     local_name: Optional[bool] = False,
     include_explicit: Optional[bool] = True,
     include_implicit: Optional[bool] = False,
-    named_graph: Optional[Union[str, IRI]] = None,
+    named_graph: Optional[GraphNameLike] = None,
 ) -> List[Union[IRI, str]]:
     """
     Get the OWL classes associated with a given individual.
@@ -200,13 +201,13 @@ def owl_get_classes_of_individual(
     optionally filters out results by prefix or returns local names only.
 
     Args:
-        instance_iri (Union[str, IRI]): IRI of the individual to inspect.
+        instance_iri (IRILike): IRI of the individual to inspect.
         ignored_prefixes (Optional[List[Namespace]]): Prefixes/namespaces to ignore
             when collecting classes. Defaults to ["owl", "rdfs"].
         local_name (Optional[bool]): If True, return only the local names of the classes. Defaults to False.
         include_explicit (Optional[bool]): Include explicit triples. Defaults to True.
         include_implicit (Optional[bool]): Include inferred triples. Defaults to False.
-        named_graph (Optional[Union[str, IRI]]): Override the client's default named graph.
+        named_graph (Optional[GraphNameLike]): Override the client's default named graph.
 
     Returns:
         List[Union[IRI, str]]: Class IRIs, or local names if `local_name=True`.

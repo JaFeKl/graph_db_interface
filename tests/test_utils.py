@@ -6,11 +6,11 @@ from graph_db_interface.exceptions import (
 )
 from graph_db_interface.utils.iri import IRI
 import pytest
-from rdflib import Literal
+from rdflib import BNode, Literal
 import datetime
 
 
-def test_sanitize_triple():
+def test_sanitize_triple_iris():
     triple_three_iri = (
         IRI("http://example.org#subject"),
         IRI("http://example.org#predicate"),
@@ -25,10 +25,41 @@ def test_sanitize_triple():
         "http://example.org#predicate",
         "http://example.org#object",
     )
-    # Must convert first two str to IRI, last to Literal
+    # Must convert all three to IRI
     sanitized_triple = utils.sanitize_triple(triple)
     assert sanitized_triple == triple_three_iri
 
+
+def test_sanitize_triple_bnodes():
+    triple_bnode = (
+        BNode("genid-123"),
+        IRI("http://example.org#predicate"),
+        BNode("genid-456"),
+    )
+    # Must not modify
+    sanitized_triple = utils.sanitize_triple(triple_bnode)
+    assert sanitized_triple == triple_bnode
+
+    triple_bnode_string = (
+        "_:genid-123",
+        "http://example.org#predicate",
+        "_:genid-456",
+    )
+    # Must convert to BNode, IRI
+    sanitized_triple = utils.sanitize_triple(triple_bnode_string)
+    assert sanitized_triple == triple_bnode
+
+    triple = (
+        IRI("http://example.org#subject"),
+        BNode("genid-123"),
+        IRI("http://example.org#object"),
+    )
+    # Predicate is BNode, is illegal
+    with pytest.raises(InvalidIRIError):
+        utils.sanitize_triple(triple)
+
+
+def test_sanitize_triple_literals():
     triple_iri_literal_string = (
         IRI("http://example.org#subject"),
         IRI("http://example.org#predicate"),
@@ -75,19 +106,20 @@ def test_sanitize_triple():
         utils.sanitize_triple(triple)
 
     triple = (
-        IRI("http://example.org#subject"),
+        Literal("http://example.org#subject"),
         IRI("http://example.org#predicate"),
+        IRI("http://example.org#object"),
     )
-    # only 2 elements
-    with pytest.raises(InvalidInputError):
+    # Subject is Literal, is illegal
+    with pytest.raises(TypeError):
         utils.sanitize_triple(triple)
 
     triple = (
-        Literal("http://example.org#subject"),
+        IRI("http://example.org#subject"),
         Literal("http://example.org#predicate"),
         IRI("http://example.org#object"),
     )
-    # first two elements are Literals, must be IRIs
+    # Predicate is Literal, is illegal
     with pytest.raises(TypeError):
         utils.sanitize_triple(triple)
 

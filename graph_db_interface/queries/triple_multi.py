@@ -1,10 +1,19 @@
 # To be imported into ..graph_db.py GraphDB class
 
 from typing import List, Union, Any, Optional, Tuple, TYPE_CHECKING
-from rdflib import Literal, BNode
+from rdflib import BNode, Literal
 from graph_db_interface.utils import utils
 from graph_db_interface.utils.iri import IRI
-from graph_db_interface.utils.utils import Triple, PartialTriple
+from graph_db_interface.utils.types import (
+    Subject,
+    Predicate,
+    PartialTripleLike,
+    SubjectLike,
+    PredicateLike,
+    ObjectLike,
+    GraphNameLike,
+    TriplesLike,
+)
 from graph_db_interface.exceptions import InvalidInputError
 
 from graph_db_interface.sparql_query import SPARQLQuery
@@ -15,29 +24,29 @@ if TYPE_CHECKING:
 
 def triples_get(
     self: "GraphDB",
-    triple: Optional[PartialTriple] = None,
-    sub: Optional[Union[str, IRI]] = None,
-    pred: Optional[Union[str, IRI]] = None,
-    obj: Optional[Union[str, IRI, Literal]] = None,
+    triple: Optional[PartialTripleLike] = None,
+    sub: Optional[SubjectLike] = None,
+    pred: Optional[PredicateLike] = None,
+    obj: Optional[ObjectLike] = None,
     include_explicit: Optional[bool] = True,
     include_implicit: Optional[bool] = True,
-    named_graph: Optional[Union[str, IRI]] = None,
-) -> List[Tuple[IRI, IRI, Any]]:
+    named_graph: Optional[GraphNameLike] = None,
+) -> List[Tuple[Subject, Predicate, Any]]:
     """
     Retrieve triples matching any combination of subject, predicate, or object.
 
     Args:
-        triple (Optional[PartialTriple]): Combined (subject, predicate, object) filter tuple. Use this
+        triple (Optional[PartialTripleLike]): Combined (subject, predicate, object) filter tuple. Use this
             or individual `sub`/`pred`/`obj`.
-        sub (Optional[Union[str, IRI]]): Subject filter (IRI/shorthand/string).
-        pred (Optional[Union[str, IRI]]): Predicate filter (IRI/shorthand/string).
-        obj (Optional[Union[str, IRI, Literal]]): Object filter (IRI/shorthand/Literal/string).
+        sub (Optional[SubjectLike]): Subject filter (IRI/shorthand/string).
+        pred (Optional[PredicateLike]): Predicate filter (IRI/shorthand/string).
+        obj (Optional[ObjectLike]): Object filter (IRI/shorthand/Literal/string).
         include_explicit (Optional[bool]): Include explicit triples. Defaults to True.
         include_implicit (Optional[bool]): Include inferred triples. Defaults to True.
-        named_graph (Optional[Union[str, IRI]]): Override the client's default named graph.
+        named_graph (Optional[GraphNameLike]): Override the client's default named graph.
 
     Returns:
-        List[Tuple[IRI, IRI, Any]]: Matching triples as `(subject, predicate, object)`, where the
+        List[Tuple[Subject, Predicate, Any]]: Matching triples as `(subject, predicate, object)`, where the
         object is converted to an appropriate Python type when applicable.
 
     Raises:
@@ -61,9 +70,9 @@ def triples_get(
 
     def _append_bind_and_filter(
         var: str,
-        value: Union[IRI, Literal],
+        value: Union[IRI, BNode, Literal],
     ) -> None:
-        if isinstance(value, IRI):
+        if isinstance(value, (IRI, BNode)):
             binds.append(f"BIND({value.n3()} AS {var})")
         elif isinstance(value, Literal):
             filter.append(f"FILTER(?o={value.n3()})")
@@ -100,15 +109,15 @@ def triples_get(
 
 def any_triple_exists(
     self: "GraphDB",
-    triples: List[Triple],
-    named_graph: Optional[Union[str, IRI]] = None,
+    triples: TriplesLike,
+    named_graph: Optional[GraphNameLike] = None,
 ) -> bool:
     """
     Check if any of the given triples exist.
 
     Args:
-        triples (List[Triple]): Triples to check.
-        named_graph (Optional[Union[str, IRI]]): Override the client's default named graph.
+        triples (TriplesLike): Triples to check.
+        named_graph (Optional[GraphNameLike]): Override the client's default named graph.
 
     Returns:
         bool: True if at least one exists, False otherwise.
@@ -135,15 +144,15 @@ def any_triple_exists(
 
 def all_triple_exists(
     self: "GraphDB",
-    triples: List[Triple],
-    named_graph: Optional[Union[str, IRI]] = None,
+    triples: TriplesLike,
+    named_graph: Optional[GraphNameLike] = None,
 ) -> bool:
     """
     Check if all of the given triples exist.
 
     Args:
-        triples (List[Triple]): Triples to check.
-        named_graph (Optional[Union[str, IRI]]): Override the client's default named graph.
+        triples (TriplesLike): Triples to check.
+        named_graph (Optional[GraphNameLike]): Override the client's default named graph.
 
     Returns:
         bool: True if all exist, False otherwise.
@@ -182,17 +191,17 @@ def all_triple_exists(
 
 def triples_add(
     self: "GraphDB",
-    triples_to_add: List[Triple],
+    triples_to_add: TriplesLike,
     check_exist: Optional[bool] = True,
-    named_graph: Optional[Union[str, IRI]] = None,
+    named_graph: Optional[GraphNameLike] = None,
 ) -> bool:
     """
     Add multiple triples to the graph database.
 
     Args:
-        triples_to_add (List[Triple]): Triples to add.
+        triples_to_add (TriplesLike): Triples to add.
         check_exist (Optional[bool]): If True, abort when any triple already exists. Defaults to True.
-        named_graph (Optional[Union[str, IRI]]): Override the client's default named graph.
+        named_graph (Optional[GraphNameLike]): Override the client's default named graph.
 
     Returns:
         bool: True if all triples were added, False otherwise.
@@ -237,17 +246,17 @@ def triples_add(
 
 def triples_delete(
     self: "GraphDB",
-    triples_to_delete: List[Triple],
+    triples_to_delete: TriplesLike,
     check_exist: Optional[bool] = True,
-    named_graph: Optional[Union[str, IRI]] = None,
+    named_graph: Optional[GraphNameLike] = None,
 ) -> bool:
     """
     Delete multiple triples from the graph database.
 
     Args:
-        triples_to_delete (List[Triple]): Triples to delete.
+        triples_to_delete (TriplesLike): Triples to delete.
         check_exist (Optional[bool]): If True, abort when any triple does not exist. Defaults to True.
-        named_graph (Optional[Union[str, IRI]]): Override the client's default named graph.
+        named_graph (Optional[GraphNameLike]): Override the client's default named graph.
 
     Returns:
         bool: True if all triples were deleted, False otherwise.
@@ -292,19 +301,19 @@ def triples_delete(
 
 def triples_update(
     self: "GraphDB",
-    old_triples: List[Triple],
-    new_triples: List[Triple],
+    old_triples: TriplesLike,
+    new_triples: TriplesLike,
     check_exist: Optional[bool] = True,
-    named_graph: Optional[Union[str, IRI]] = None,
+    named_graph: Optional[GraphNameLike] = None,
 ) -> bool:
     """
     Update multiple RDF triples in the triplestore.
 
     Args:
-        old_triples (List[Triple]): Triples to be replaced.
-        new_triples (List[Triple]): Replacement triples (same length as `old_triples`).
+        old_triples (TriplesLike): Triples to be replaced.
+        new_triples (TriplesLike): Replacement triples (same length as `old_triples`).
         check_exist (Optional[bool]): If True, abort when any old triple does not exist. Defaults to True.
-        named_graph (Optional[Union[str, IRI]]): Override the client's default named graph.
+        named_graph (Optional[GraphNameLike]): Override the client's default named graph.
 
     Returns:
         bool: True if the update was successful, False otherwise.

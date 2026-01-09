@@ -1,7 +1,8 @@
 from requests import Response
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Optional
 from rdflib import Graph
 from graph_db_interface.utils.iri import IRI
+from graph_db_interface.utils.types import GraphNameLike
 
 if TYPE_CHECKING:
     from graph_db_interface import GraphDB
@@ -9,7 +10,7 @@ if TYPE_CHECKING:
 
 def fetch_statements(
     self: "GraphDB",
-    graph_iri: Optional[Union[str, IRI]] = None,
+    graph_iri: Optional[GraphNameLike] = None,
 ) -> Optional[Graph]:
     """
     Fetch statements from a named or the default graph.
@@ -18,7 +19,7 @@ def fetch_statements(
     `rdflib.Graph`. When `graph_iri` is None, the default graph is fetched.
 
     Args:
-        graph_iri (Optional[Union[str, IRI]]): The named graph IRI to fetch; when
+        graph_iri (Optional[GraphNameLike]): The named graph IRI to fetch; when
             None, the default graph is fetched.
 
     Returns:
@@ -61,7 +62,7 @@ def import_statements(
     self: "GraphDB",
     content: str,
     overwrite: Optional[bool] = False,
-    graph_iri: Optional[Union[str, IRI]] = None,
+    graph_iri: Optional[GraphNameLike] = None,
     content_type: Optional[str] = "application/x-turtle",
 ) -> bool:
     """
@@ -73,7 +74,7 @@ def import_statements(
     Args:
         content (str): RDF content to import.
         overwrite (Optional[bool]): Use PUT to overwrite existing content. Defaults to False.
-        graph_iri (Optional[Union[str, IRI]]): Target named graph IRI; default graph when None.
+        graph_iri (Optional[GraphNameLike]): Target named graph IRI; default graph when None.
         content_type (Optional[str]): MIME type of `content` (e.g., 'application/x-turtle').
             Defaults to 'application/x-turtle'.
 
@@ -117,7 +118,7 @@ def import_statements(
 
 def clear_graph(
     self: "GraphDB",
-    graph_iri: Optional[Union[str, IRI]] = None,
+    graph_iri: Optional[GraphNameLike] = None,
 ) -> bool:
     """
     Clear a named graph or the default graph.
@@ -126,7 +127,7 @@ def clear_graph(
     None, clears the default graph.
 
     Args:
-        graph_iri (Optional[Union[str, IRI]]): IRI of the named graph to clear;
+        graph_iri (Optional[GraphNameLike]): IRI of the named graph to clear;
             default graph when None.
 
     Returns:

@@ -8,6 +8,7 @@ import logging
 from requests import Response
 from graph_db_interface.utils.graph_db_credentials import GraphDBCredentials
 from graph_db_interface.utils.iri import IRI
+from graph_db_interface.utils.types import GraphNameLike, GraphName
 from graph_db_interface.sparql_query import SPARQLQuery
 from graph_db_interface.exceptions import (
     InvalidRepositoryError,
@@ -31,7 +32,7 @@ class GraphDB:
         credentials: GraphDBCredentials,
         timeout: int = 60,
         use_gdb_token: bool = True,
-        named_graph: Optional[Union[str, IRI]] = None,
+        named_graph: Optional[GraphNameLike] = None,
         logger: Optional[logging.Logger] = None,
     ):
         if logger is None:
@@ -127,7 +128,7 @@ class GraphDB:
         self._repository = self._validate_repository(value)
 
     @property
-    def named_graph(self) -> Optional[IRI]:
+    def named_graph(self) -> Optional[GraphName]:
         """
         The currently selected default named graph.
 
@@ -139,7 +140,7 @@ class GraphDB:
     @named_graph.setter
     def named_graph(
         self,
-        value: Optional[Union[str, IRI]],
+        value: Optional[GraphNameLike],
     ):
         if value is None:
             self._named_graph = None

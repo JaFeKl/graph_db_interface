@@ -1,5 +1,6 @@
 import logging
-from typing import TypeAlias, Union, Optional, Any, Tuple
+import re
+from typing import Union, Optional, Any
 from rdflib import Literal, XSD, Dataset, BNode, URIRef
 from rdflib.plugins.sparql.processor import prepareQuery
 from graph_db_interface.exceptions import (
@@ -7,27 +8,31 @@ from graph_db_interface.exceptions import (
     InvalidQueryError,
 )
 from graph_db_interface.utils.iri import IRI
-from graph_db_interface.utils.typemap import XSDToPythonMapper, XSDToPythonTypes
+from graph_db_interface.utils.types import (
+    BNodeLike,
+    IRILike,
+    Triple,
+    PartialTriple,
+    TripleLike,
+    PartialTripleLike,
+    Subject,
+    Predicate,
+    Object,
+    SubjectLike,
+    PredicateLike,
+    ObjectLike,
+)
+from graph_db_interface.utils.xsd_typemap import XSDToPythonMapper, XSDToPythonTypes
 
 LOGGER = logging.getLogger(__name__)
 
-Triple: TypeAlias = Tuple[
-    Union[str, IRI],
-    Union[str, IRI],
-    Union[str, IRI, Literal],
-]
-
-PartialTriple: TypeAlias = Tuple[
-    Optional[Union[str, IRI]],
-    Optional[Union[str, IRI]],
-    Optional[Union[str, IRI, Literal]],
-]
+BNODE_PATTERN = re.compile(r"^_:[a-zA-Z][a-zA-Z0-9_\-]*$")
 
 
 def sanitize_triple(
-    triple: Triple,
+    triple: Union[TripleLike, PartialTripleLike],
     allow_partial: Optional[bool] = False,
-) -> Triple:
+) -> Union[Triple, PartialTriple]:
     """
     Validates and converts the components of a triple to their appropriate types.
 
@@ -42,12 +47,11 @@ def sanitize_triple(
         - If the object is of any other type, it will be converted to a Literal.
 
     Args:
-        triple (Triple): The triple to validate and convert.
+        triple (Union[TripleLike, PartialTripleLike]): The triple to validate and convert.
         allow_partial (Optional[bool]): Whether to allow partial triples. Defaults to False.
 
     Returns:
-        Triple: The validated and converted triple.
-
+        Union[Triple, PartialTriple]: The validated and converted triple.
     Raises:
         InvalidInputError: If the triple does not have three or too many None entries.
         TypeError: If subject or predicate are not of type str, URIRef, or IRI.
@@ -69,44 +73,65 @@ def sanitize_triple(
 
     sub, pred, obj = triple
 
-    # Sub must be IRI
-    if sub is not None and not isinstance(sub, IRI):
-        sub = IRI(sub)
+    if sub is not None and not isinstance(sub, Subject):
+        sub = _to_subject(sub)
+    if pred is not None and not isinstance(pred, Predicate):
+        pred = _to_predicate(pred)
+    if obj is not None and not isinstance(obj, Object):
+        obj = _to_object(obj)
 
-    # Pred must be IRI
-    if pred is not None and not isinstance(pred, IRI):
-        pred = IRI(pred)
-
-    # Pred must be IRI or Literal
-    # If str, try IRI first, then Literal. Otherwise, Literal.
-    if obj is not None and not isinstance(obj, (IRI, Literal)):
-        if isinstance(obj, str):
-            try:
-                obj = IRI(str(obj))
-            except Exception as e:
-                error_message = (
-                    "Object is of type str but cannot be converted to IRI. If object "
-                    + f"is a <Literal>, explicitly convert before passing: {obj} ({e})"
-                )
-                LOGGER.error(error_message)
-                raise type(e)(error_message) from e
-        else:
-            obj = Literal(obj)
     return sub, pred, obj
 
 
+def _to_iri_or_bnode(value: Union[IRILike, BNodeLike]) -> Union[IRI, BNode]:
+    """Try converting a IRILike or BNodeLike."""
+    if isinstance(value, Union[IRI, BNode]):
+        return value
+
+    if BNODE_PATTERN.match(str(value)):
+        return BNode(value[2:])  # Remove '_:' prefix for BNode id
+
+    return IRI(value)
+
+
+def _to_subject(sub: SubjectLike) -> Subject:
+    """Convert a SubjectLike to a Subject."""
+    return _to_iri_or_bnode(sub)
+
+
+def _to_predicate(pred: PredicateLike) -> Predicate:
+    """Convert a PredicateLike to a Predicate."""
+    return IRI(pred)
+
+
+def _to_object(obj: ObjectLike) -> Object:
+    """Convert an ObjectLike to an Object."""
+    if isinstance(obj, Object):
+        return obj
+
+    if isinstance(obj, str):
+        try:
+            return _to_iri_or_bnode(str(obj))
+        except Exception as e:
+            error_message = f"Object is of type str but cannot be converted to IRI or BNode. If object is a <Literal>, explicitly convert before passing: {obj} ({e})"
+            LOGGER.error(error_message)
+            raise type(e)(error_message) from e
+    else:
+        return Literal(obj)
+
+
 def triple_to_string(
-    triple: Triple,
+    triple: TripleLike,
     line_end: Optional[str] = None,
 ) -> str:
     """Convert a triple to its string representation suitable for SPARQL queries.
 
     Args:
-        triple (Triple): The triple to convert.
+        triple (TripleLike): The triple to convert.
     Returns:
         str: The string representation of the triple.
     """
-    sub, pred, obj = triple
+    sub, pred, obj = sanitize_triple(triple)
     return f"{sub.n3()} {pred.n3()} {obj.n3()}" + (f" {line_end}" if line_end else "")
 
 

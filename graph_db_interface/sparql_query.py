@@ -1,8 +1,8 @@
 from enum import Enum
-from typing import List, Optional, Union
+from typing import List, Optional
 from graph_db_interface.utils import utils
-from graph_db_interface.utils.utils import Triple
 from graph_db_interface.utils.iri import IRI
+from graph_db_interface.utils.types import TriplesLike, GraphNameLike
 
 
 class SPARQLQueryType(Enum):
@@ -30,7 +30,7 @@ class SPARQLQuery:
 
     def __init__(
         self,
-        named_graph: Optional[Union[str, IRI]] = None,
+        named_graph: Optional[GraphNameLike] = None,
         include_explicit: Optional[bool] = True,
         include_implicit: Optional[bool] = True,
     ):
@@ -124,7 +124,7 @@ WHERE {{
     @classmethod
     def insert_data(
         cls,
-        triples: List[Triple],
+        triples: TriplesLike,
         **kwargs,
     ) -> "SPARQLQuery":
         """
@@ -137,13 +137,13 @@ WHERE {{
 
     def add_insert_data_block(
         self,
-        triples: List[Triple],
+        triples: TriplesLike,
     ) -> None:
         """
         Add an INSERT DATA block comprised of triples.
 
         Args:
-            triples (List[Triple]): Triples to insert.
+            triples (TriplesLike): Triples to insert.
         """
         block_parts = []
         data_combined = "\n".join(
@@ -162,7 +162,7 @@ WHERE {{
     @classmethod
     def insert_exists(
         cls,
-        triples: List[Triple],
+        triples: TriplesLike,
         **kwargs,
     ) -> "SPARQLQuery":
         """
@@ -175,13 +175,13 @@ WHERE {{
 
     def add_insert_exists_block(
         self,
-        triples: List[Triple],
+        triples: TriplesLike,
     ) -> None:
         """
         Add an INSERT ... WHERE NOT EXISTS block.
 
         Args:
-            triples (List[Triple]): Triples to insert when they do not already exist.
+            triples (TriplesLike): Triples to insert when they do not already exist.
         """
         block_parts = []
         data_combined = "\n".join(
@@ -205,7 +205,7 @@ WHERE {{ FILTER NOT EXISTS {{
     @classmethod
     def delete_data(
         cls,
-        triples: List[Triple],
+        triples: TriplesLike,
         **kwargs,
     ) -> "SPARQLQuery":
         """
@@ -218,13 +218,13 @@ WHERE {{ FILTER NOT EXISTS {{
 
     def add_delete_data_block(
         self,
-        triples: List[Triple],
+        triples: TriplesLike,
     ) -> None:
         """
         Add a DELETE DATA block comprised of triples.
 
         Args:
-            triples (List[Triple]): Triples to delete.
+            triples (TriplesLike): Triples to delete.
         """
         block_parts = []
         data_combined = "\n".join(
@@ -243,8 +243,8 @@ WHERE {{ FILTER NOT EXISTS {{
     @classmethod
     def delete_insert_data(
         cls,
-        delete_triples: List[Triple],
-        insert_triples: List[Triple],
+        delete_triples: TriplesLike,
+        insert_triples: TriplesLike,
         where_clauses: List[str],
         **kwargs,
     ) -> "SPARQLQuery":
@@ -262,16 +262,16 @@ WHERE {{ FILTER NOT EXISTS {{
 
     def add_delete_insert_data_block(
         self,
-        delete_triples: List[Triple],
-        insert_triples: List[Triple],
+        delete_triples: TriplesLike,
+        insert_triples: TriplesLike,
         where_clauses: List[str],
     ) -> None:
         """
         Add a combined DELETE/INSERT block with WHERE.
 
         Args:
-            delete_triples (List[Triple]): Triples to delete.
-            insert_triples (List[Triple]): Triples to insert.
+            delete_triples (TriplesLike): Triples to delete.
+            insert_triples (TriplesLike): Triples to insert.
             where_clauses (List[str]): WHERE patterns selecting the triples to update.
         """
         block_parts = []

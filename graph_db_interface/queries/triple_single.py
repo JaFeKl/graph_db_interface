@@ -1,11 +1,15 @@
 # To be imported into ..graph_db.py GraphDB class
 
-from typing import Optional, Union, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 from graph_db_interface.utils import utils
 from graph_db_interface.utils.iri import IRI
-from graph_db_interface.utils.utils import (
-    Triple,
-    PartialTriple,
+from graph_db_interface.utils.types import (
+    PartialTripleLike,
+    SubjectLike,
+    PredicateLike,
+    ObjectLike,
+    GraphNameLike,
+    TripleLike,
 )
 from graph_db_interface.exceptions import InvalidInputError
 
@@ -17,15 +21,15 @@ if TYPE_CHECKING:
 
 def triple_exists(
     self: "GraphDB",
-    triple: Triple,
-    named_graph: Optional[Union[str, IRI]] = None,
+    triple: TripleLike,
+    named_graph: Optional[GraphNameLike] = None,
 ) -> bool:
     """
     Check whether a specific triple exists in the graph database.
 
     Args:
-        triple (Triple): The triple `(subject, predicate, object)` to check.
-        named_graph (Optional[Union[str, IRI]]): Override the client's default named graph.
+        triple (TripleLike): The triple `(subject, predicate, object)` to check.
+        named_graph (Optional[GraphNameLike]): Override the client's default named graph.
 
     Returns:
         bool: True if the triple exists, False otherwise.
@@ -54,15 +58,15 @@ def triple_exists(
 
 def triple_add(
     self: "GraphDB",
-    triple: Triple,
-    named_graph: Optional[Union[str, IRI]] = None,
+    triple: TripleLike,
+    named_graph: Optional[GraphNameLike] = None,
 ) -> bool:
     """
     Add a triple to the graph database.
 
     Args:
-        triple (Triple): The triple `(subject, predicate, object)` to insert.
-        named_graph (Optional[Union[str, IRI]]): Override the client's default named graph.
+        triple (TripleLike): The triple `(subject, predicate, object)` to insert.
+        named_graph (Optional[GraphNameLike]): Override the client's default named graph.
 
     Returns:
         bool: True if the triple was inserted, False otherwise.
@@ -90,9 +94,9 @@ def triple_add(
 
 def triple_delete(
     self: "GraphDB",
-    triple: Triple,
+    triple: TripleLike,
     check_exist: Optional[bool] = True,
-    named_graph: Optional[Union[str, IRI]] = None,
+    named_graph: Optional[GraphNameLike] = None,
 ) -> bool:
     """
     Delete a single triple.
@@ -102,9 +106,9 @@ def triple_delete(
     present before attempting deletion.
 
     Args:
-        triple (Triple): The triple `(subject, predicate, object)` to delete.
+        triple (TripleLike): The triple `(subject, predicate, object)` to delete.
         check_exist (Optional[bool]): Whether to verify existence prior to deletion. Defaults to True.
-        named_graph (Optional[Union[str, IRI]]): Override the client's default named graph.
+        named_graph (Optional[GraphNameLike]): Override the client's default named graph.
 
     Returns:
         bool: True if deletion succeeded (or triple absent when `check_exist=False`), False otherwise.
@@ -136,13 +140,13 @@ def triple_delete(
 
 def triple_update(
     self: "GraphDB",
-    old_triple: Triple,
-    new_triple: Optional[PartialTriple] = None,
-    new_sub: Optional[Union[str, IRI]] = None,
-    new_pred: Optional[Union[str, IRI]] = None,
-    new_obj: Optional[Union[str, IRI]] = None,
+    old_triple: TripleLike,
+    new_triple: Optional[PartialTripleLike] = None,
+    new_sub: Optional[SubjectLike] = None,
+    new_pred: Optional[PredicateLike] = None,
+    new_obj: Optional[ObjectLike] = None,
     check_exist: Optional[bool] = True,
-    named_graph: Optional[Union[str, IRI]] = None,
+    named_graph: Optional[GraphNameLike] = None,
 ) -> bool:
     """
     Update a triple by replacing any of its parts.
@@ -151,14 +155,14 @@ def triple_update(
     with a new triple built from provided parts.
 
     Args:
-        old_triple (Triple): Existing triple to update.
-        new_triple (Optional[PartialTriple]): Replacement values (subject/predicate/object). Use this
+        old_triple (TripleLike): Existing triple to update.
+        new_triple (Optional[PartialTripleLike]): Replacement values (subject/predicate/object). Use this
             or `new_sub`/`new_pred`/`new_obj`.
-        new_sub (Optional[Union[str, IRI]]): Replacement subject.
-        new_pred (Optional[Union[str, IRI]]): Replacement predicate.
-        new_obj (Optional[Union[str, IRI]]): Replacement object.
+        new_sub (Optional[SubjectLike]): Replacement subject.
+        new_pred (Optional[PredicateLike]): Replacement predicate.
+        new_obj (Optional[ObjectLike]): Replacement object.
         check_exist (Optional[bool]): If True, verify that `old_triple` exists before updating. Defaults to True.
-        named_graph (Optional[Union[str, IRI]]): Override the client's default named graph.
+        named_graph (Optional[GraphNameLike]): Override the client's default named graph.
 
     Returns:
         bool: True if the update succeeded, False otherwise.

@@ -1,7 +1,7 @@
 # To be imported into ..graph_db.py GraphDB class
 
 from typing import List, TYPE_CHECKING
-from graph_db_interface.utils.iri import IRI
+from graph_db_interface.utils.types import GraphNameLike
 
 if TYPE_CHECKING:
     from graph_db_interface import GraphDB
@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 def get_list_of_named_graphs(
     self: "GraphDB",
-) -> List[IRI]:
+) -> List[GraphNameLike]:
     """
     Get the list of named graphs in the current repository.
 
