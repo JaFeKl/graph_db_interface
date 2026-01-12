@@ -79,30 +79,33 @@ def iri_exists(
 def new_iri(
     self: "GraphDB",
     base: IRILike,
-    schema: Optional[Callable[[], str]] = lambda: str(uuid.uuid4()),
+    schema: Optional[Callable[[IRI], IRI]] = lambda base: (
+        f"{base}-{uuid.uuid4()}" if base.fragment else f"{base}#instance-{uuid.uuid4()}"
+    ),
+    test_schema: bool = True,
 ) -> IRI:
     """
     Generate a new unique IRI within the graph database's namespace.
 
     Args:
         base (IRILike): The base IRI or namespace for the new IRI.
-        schema (Optional[Callable[[], str]]): A callable that generates the unique part
-            of the IRI. Defaults to a UUID4 string generator.
+        schema (Optional[Callable[[IRI], IRI]]): A callable that generates the new IRI.
+            Takes the base IRI as an argument. Defaults to a `{onto}#{fragment}-{UUID4}`.
+            If fragment of base is empty, uses `{onto}#instance-{UUID4}`.
 
     Returns:
         IRI: A new unique IRI.
     """
-    if schema() == schema():
+    if base is None:
+        raise InvalidInputError("Base IRI must be provided for new IRI generation")
+
+    base = IRI(base)
+
+    if test_schema and schema(base) == schema(base):
         raise ValueError("Schema function must produce different values on each call")
 
-    base = base.rstrip("#")
-    if "#" in base:
-        base, fragment_start = base.split("#", 1)
-    else:
-        fragment_start = ""
-
     def new() -> str:
-        return IRI(value=fragment_start + schema(), base=base)
+        return IRI(schema(base))
 
     iri = new()
 

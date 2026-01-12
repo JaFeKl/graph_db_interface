@@ -1,4 +1,4 @@
-import random
+import itertools
 import pytest
 from rdflib import Literal, XSD
 from graph_db_interface import GraphDB
@@ -604,56 +604,62 @@ def test_convenience_functions(db: GraphDB, named_graph: str):
 
 
 def test_iri_generation(db: GraphDB, named_graph: str):
-    valid_schema = lambda: str(random.randint(0, 1000000))
-    invalid_schema = lambda: "fixed"
+    counter = itertools.count()
+    valid_iri_schema = lambda base: f"{base}#{counter.__next__()}"
+    invalid_iri_schema = lambda base: f"{base}#fixed"
+    valid_genid_schema = lambda: f"blank-{counter.__next__()}"
+    invalid_genid_schema = lambda: "fixed-blank"
+
+    base_no_fragment = "http://example.org"
+    base_with_fragment = "http://example.org#ClassName"
 
     # Generate a new IRI
     iri1 = db.new_iri(
-        base="http://example.org",
+        base=base_no_fragment,
     )
     assert isinstance(iri1, IRI)
     assert iri1.onto == "http://example.org"
 
     # Ensure uniqueness
     iri2 = db.new_iri(
-        base="http://example.org",
+        base=base_no_fragment,
     )
     assert iri1 != iri2
 
     # Generate with fragment base
     iri3 = db.new_iri(
-        base="http://example.org#ClassName_",
+        base=base_with_fragment,
     )
     assert isinstance(iri3, IRI)
     assert iri3.onto == "http://example.org"
-    assert iri3.fragment.startswith("ClassName_")
+    assert iri3.fragment.startswith("ClassName-")
 
     # Ensure uniqueness
     iri4 = db.new_iri(
-        base="http://example.org#ClassName_",
+        base=base_with_fragment,
     )
     assert iri3 != iri4
 
     # Generate with schema
     iri5 = db.new_iri(
-        base="http://example.org",
-        schema=valid_schema,
+        base=base_no_fragment,
+        schema=valid_iri_schema,
     )
     assert isinstance(iri5, IRI)
     assert iri5.onto == "http://example.org"
     assert iri1 != iri5
 
     iri6 = db.new_iri(
-        base="http://example.org",
-        schema=valid_schema,
+        base=base_no_fragment,
+        schema=valid_iri_schema,
     )
     assert iri5 != iri6
 
     # Invalid schema that does not produce unique IRIs
     with pytest.raises(ValueError):
         db.new_iri(
-            base="http://example.org",
-            schema=invalid_schema,
+            base=base_no_fragment,
+            schema=invalid_iri_schema,
         )
 
     # Generate blank node IDs
@@ -665,18 +671,18 @@ def test_iri_generation(db: GraphDB, named_graph: str):
 
     # Generate with schema
     genid3 = db.new_blank_id(
-        schema=valid_schema,
+        schema=valid_genid_schema,
     )
     assert isinstance(genid3, str)
     assert genid1 != genid3
 
     genid4 = db.new_blank_id(
-        schema=valid_schema,
+        schema=valid_genid_schema,
     )
     assert genid3 != genid4
 
     # Invalid schema that does not produce unique blank IDs
     with pytest.raises(ValueError):
         db.new_blank_id(
-            schema=invalid_schema,
+            schema=invalid_genid_schema,
         )
