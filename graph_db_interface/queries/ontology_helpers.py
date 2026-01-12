@@ -79,9 +79,7 @@ def iri_exists(
 def new_iri(
     self: "GraphDB",
     base: IRILike,
-    schema: Optional[Callable[[IRI], IRI]] = lambda base: (
-        f"{base}-{uuid.uuid4()}" if base.fragment else f"{base}#instance-{uuid.uuid4()}"
-    ),
+    schema: Optional[Callable[[IRI], IRI]] = None,
     test_schema: bool = True,
 ) -> IRI:
     """
@@ -101,7 +99,13 @@ def new_iri(
 
     base = IRI(base)
 
-    if test_schema and schema(base) == schema(base):
+    if schema is None:
+        schema = lambda base: (
+            f"{base}-{uuid.uuid4()}"
+            if base.fragment
+            else f"{base}#instance-{uuid.uuid4()}"
+        )
+    elif test_schema and schema(base) == schema(base):
         raise ValueError("Schema function must produce different values on each call")
 
     def new() -> str:
