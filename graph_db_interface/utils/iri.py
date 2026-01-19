@@ -85,12 +85,49 @@ class IRI(URIRef):
     @property
     def lined(self) -> str:
         """
-        Return a version of the iri with symbols ".:/#" replaced by "_"
+        Convert IRI to valid Python identifier using Punycode-style markers.
 
-        Returns:
-            str: Cleaned up name
+        Encoding: _ → __, : → _c_, / → _s_, . → _d_, # → _h_
+
+        Human-readable and fully reversible. Markers mnemonically represent their chars:
+        _c_ = colon, _s_ = slash, _d_ = dot, _h_ = hash.
+
+        Example: https://example.com#Property → https_c_example_d_com_h_Property
         """
-        return "_".join(filter(None, re.split("\.|:|/|#", self)))
+        result = []
+        for char in str(self):
+            if char == "_":
+                result.append("__")
+            elif char == ":":
+                result.append("_c_")
+            elif char == "/":
+                result.append("_s_")
+            elif char == ".":
+                result.append("_d_")
+            elif char == "#":
+                result.append("_h_")
+            else:
+                result.append(char)
+        return "".join(result)
+
+    @classmethod
+    def from_lined(cls, lined: str) -> IRI:
+        """
+        Decode a lined identifier back to full IRI.
+
+        Reverses the encoding applied by `lined` property.
+        Decode order: _c_→:, _s_→/, _d_→., _h_→#, then __→_.
+
+        Example: https_c_example_d_com_h_Property → https://example.com#Property
+        """
+        iri_str = (
+            lined.replace("_c_", ":")
+            .replace("_s_", "/")
+            .replace("_d_", ".")
+            .replace("_h_", "#")
+            .replace("__", "_")
+        )
+        return cls(iri_str)
 
     @property
     def onto(self) -> str:
