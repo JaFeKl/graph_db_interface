@@ -308,3 +308,28 @@ def test_short():
 
     assert iri1.short == "owl:Class"
     assert iri3.short == "<http://unknown.org#Entity>"
+
+
+def test_lined():
+    iri1 = IRI("http://www.w3.org/2002/07/owl#Class")
+    iri2 = IRI("https://example.com/path/to/resource#Property")
+    iri3 = IRI("http://example.com#A_B_C")
+    iri4 = IRI("https://sub.domain.co.uk/path.to/resource_name#Property-1")
+
+    assert iri1.lined == "http_c__s__s_www_d_w3_d_org_s_2002_s_07_s_owl_h_Class"
+    assert iri2.lined == "https_c__s__s_example_d_com_s_path_s_to_s_resource_h_Property"
+    assert iri3.lined == "http_c__s__s_example_d_com_h_A__B__C"
+    assert (
+        iri4.lined
+        == "https_c__s__s_sub_d_domain_d_co_d_uk_s_path_d_to_s_resource__name_h_Property-1"
+    )
+
+    iri1_reconstructed = IRI.from_lined(iri1.lined)
+    iri2_reconstructed = IRI.from_lined(iri2.lined)
+    iri3_reconstructed = IRI.from_lined(iri3.lined)
+    iri4_reconstructed = IRI.from_lined(iri4.lined)
+
+    assert iri1_reconstructed == iri1
+    assert iri2_reconstructed == iri2
+    assert iri3_reconstructed == iri3
+    assert iri4_reconstructed == iri4

@@ -44,6 +44,17 @@ class IRI(URIRef):
     # Valid schemes for full IRIs, end with '://'
     SCHEMES = {"http://", "https://"}
 
+    # Patterns for lined encoding/decoding. Underscore must be first.
+    LINED_PATTERN = [
+        ("_", "__"),
+        (":", "_c_"),
+        ("/", "_s_"),
+        (".", "_d_"),
+        ("#", "_h_"),
+    ]
+    # Patterns for lined encoding/decoding. Underscore must be last.
+    LINED_PATTERN_INV = [(b, a) for a, b in reversed(LINED_PATTERN)]
+
     def __new__(
         cls,
         value: str,
@@ -92,23 +103,12 @@ class IRI(URIRef):
         Human-readable and fully reversible. Markers mnemonically represent their chars:
         _c_ = colon, _s_ = slash, _d_ = dot, _h_ = hash.
 
-        Example: https://example.com#Property → https_c_example_d_com_h_Property
+        Example: https://example.com#Property → https_c__s__s_example_d_com_h_Property
         """
-        result = []
-        for char in str(self):
-            if char == "_":
-                result.append("__")
-            elif char == ":":
-                result.append("_c_")
-            elif char == "/":
-                result.append("_s_")
-            elif char == ".":
-                result.append("_d_")
-            elif char == "#":
-                result.append("_h_")
-            else:
-                result.append(char)
-        return "".join(result)
+        lined = str(self)
+        for a, b in self.LINED_PATTERN:
+            lined = lined.replace(a, b)
+        return lined
 
     @classmethod
     def from_lined(cls, lined: str) -> IRI:
@@ -118,16 +118,11 @@ class IRI(URIRef):
         Reverses the encoding applied by `lined` property.
         Decode order: _c_→:, _s_→/, _d_→., _h_→#, then __→_.
 
-        Example: https_c_example_d_com_h_Property → https://example.com#Property
+        Example: https_c__s__s_example_d_com_h_Property → https://example.com#Property
         """
-        iri_str = (
-            lined.replace("_c_", ":")
-            .replace("_s_", "/")
-            .replace("_d_", ".")
-            .replace("_h_", "#")
-            .replace("__", "_")
-        )
-        return cls(iri_str)
+        for a, b in cls.LINED_PATTERN_INV:
+            lined = lined.replace(a, b)
+        return cls(lined)
 
     @property
     def onto(self) -> str:
