@@ -96,14 +96,24 @@ class IRI(URIRef):
     @property
     def lined(self) -> str:
         """
-        Convert IRI to valid Python identifier using Punycode-style markers.
+        Convert IRI to valid Python identifier using reversible marker encoding.
 
-        Encoding: _ → __, : → _c_, / → _s_, . → _d_, # → _h_
+        Character encoding:
+        - _ → __  (underscore escaped to preserve marker distinction)
+        - : → _c_ (colon)
+        - / → _s_ (slash)
+        - . → _d_ (dot)
+        - # → _h_ (hash)
 
-        Human-readable and fully reversible. Markers mnemonically represent their chars:
-        _c_ = colon, _s_ = slash, _d_ = dot, _h_ = hash.
+        This is a simple, human-readable alternative to Punycode—optimized for
+        debugging and direct IRI recognition in code, not for compression.
 
-        Example: https://example.com#Property → https_c__s__s_example_d_com_h_Property
+        Markers use mnemonic single letters (_c_=colon, _s_=slash, etc.) for
+        easy visual decoding. Order of replacement matters for reversibility.
+
+        Example:
+            https://www.sfb1574.kit.edu/ontologies/TransferUnit#hasConveyorBelt
+            → https_c_www_d_sfb1574_d_kit_d_edu_s_ontologies_s_TransferUnit_h_hasConveyorBelt
         """
         lined = str(self)
         for a, b in self.LINED_PATTERN:
