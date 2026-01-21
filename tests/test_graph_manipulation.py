@@ -1,335 +1,688 @@
-from typing import Tuple
+import itertools
 import pytest
 from rdflib import Literal, XSD
 from graph_db_interface import GraphDB
 from graph_db_interface.exceptions import InvalidInputError
 from graph_db_interface.utils import utils
+from graph_db_interface.utils.iri import IRI
 
-NAMED_GRAPH = "http://example.org/named_graph"
+GLOBAL_NAMED_GRAPH = "http://example.org/named_graph"
+LOCAL_NAMED_GRAPH = "http://example.org/local_named_graph"
 
-SUBJECT_1 = "<http://example.org/subject_1>"
-PREDICATE_1 = "<http://example.org/predicate_1>"
-OBJECT_1 = Literal(0.5, datatype=XSD.double)  # data value
+SUB_1 = "http://example.org#subject_1"
+PRED_1 = "http://example.org#predicate_1"
+OBJ_1 = 0.5
 
-SUBJECT_2 = "<http://example.org/subject_2>"
-PREDICATE_2 = "<http://example.org/predicate_2>"
-OBJECT_2 = Literal(42, datatype=XSD.integer)  # data value
+SUB_2 = "http://example.org#subject_2"
+PRED_2 = "http://example.org#predicate_2"
+OBJ_2 = 42
 
+NEW_SUB_1 = "http://example.org#new_subject"
+NEW_PRED_1 = "http://example.org#new_predicate"
+NEW_OBJ_1 = Literal('string with "quotes"', datatype=XSD.string)
 
-NEW_SUBJECT_1 = "<http://example.org/new_subject>"
-NEW_PREDICATE_1 = "<http://example.org/new_predicate>"
-NEW_OBJECT_1 = Literal('string with "quotes"', datatype=XSD.string)
-
-NEW_SUBJECT_2 = "<http://example.org/new_subject_2>"
-NEW_PREDICATE_2 = "<http://example.org/new_predicate_2>"
-NEW_OBJECT_2 = Literal(True, datatype=XSD.boolean)
-
-from typing import Any
-
-from typing import List, Union
-
-LIST_OF_TRIPLES: List[Tuple[str, str, Union[str, Literal]]] = [
-    (SUBJECT_1, PREDICATE_1, OBJECT_1),
-    (SUBJECT_2, PREDICATE_2, OBJECT_2),
-]
-LIST_OF_NEW_TRIPLES: List[Tuple[str, str, Union[str, Literal]]] = [
-    (NEW_SUBJECT_1, NEW_PREDICATE_1, NEW_OBJECT_1),
-    (NEW_SUBJECT_2, NEW_PREDICATE_2, NEW_OBJECT_2),
-]
+NEW_SUB_2 = "http://example.org#new_subject_2"
+NEW_PRED_2 = "http://example.org#new_predicate_2"
+NEW_OBJ_2 = True
 
 
-@pytest.fixture(params=[None, NAMED_GRAPH], scope="module", autouse=True)
+@pytest.fixture(params=[None, LOCAL_NAMED_GRAPH], scope="module")
+def named_graph(request) -> str:
+    # Provide a per-test local override for the named graph
+    return request.param
+
+
+@pytest.fixture(params=[None, GLOBAL_NAMED_GRAPH], scope="module", autouse=True)
 def setup(request, db: GraphDB):
-    named_graph = request.param
-    # We once set a named graph and once we don't
-    db.named_graph = named_graph
+    # Set or unset the global named graph on the DB client
+    db.named_graph = request.param
 
 
-def test_add_and_delete_triple(db: GraphDB):
+def test_add_and_delete_triple(db: GraphDB, named_graph: str):
     # Add a new triple
-    result = db.triple_add(SUBJECT_1, PREDICATE_1, OBJECT_1)
-    assert result is True
-
-    # try to delete the triple
-    result = db.triple_delete(SUBJECT_1, PREDICATE_1, OBJECT_1)
-    assert result is True
-
-    # try to delete the triple again
-    result = db.triple_delete(SUBJECT_1, PREDICATE_1, OBJECT_1)
-    assert result is False
-
-    # if we dont check for existence it shoud return True
-    result = db.triple_delete(SUBJECT_1, PREDICATE_1, OBJECT_1, check_exist=False)
-    assert result is True
-
-
-def test_add_and_delete_multiple_triples(db: GraphDB):
-    # add multiple triples
-    result = db.triples_add(LIST_OF_TRIPLES)
-    assert result is True
-
-    # try to delete the triples
-    result = db.triples_delete(LIST_OF_TRIPLES)
-    assert result is True
-
-    # try to delete the triples again
-    result = db.triples_delete(LIST_OF_TRIPLES)
-    assert result is False
-
-    # if we dont check for existence it shoud return True
-    result = db.triples_delete(LIST_OF_TRIPLES, check_exist=False)
-    assert result is True
-
-
-def test_update_triple(db: GraphDB):
-    # Add a new triple
-    result = db.triple_add(SUBJECT_1, PREDICATE_1, OBJECT_1)
-    assert result is True
-
-    # Input errors
-    with pytest.raises(InvalidInputError):
-        db.triple_update(sub_old=SUBJECT_1, pred_old=PREDICATE_1, obj_old=None)
-
-    # Nothing to update
-    with pytest.raises(InvalidInputError):
-        db.triple_update(sub_old=SUBJECT_1, pred_old=PREDICATE_1, obj_old=OBJECT_1)
-
-    # try to update the full triple and change its object
-    result = db.triple_update(
-        sub_old=SUBJECT_1,
-        pred_old=PREDICATE_1,
-        obj_old=OBJECT_1,
-        sub_new=NEW_SUBJECT_1,
-        pred_new=NEW_PREDICATE_1,
-        obj_new=NEW_OBJECT_1,
+    result = db.triple_add(
+        (SUB_1, PRED_1, OBJ_1),
+        named_graph=named_graph,
     )
     assert result is True
 
-    result = db.triple_delete(NEW_SUBJECT_1, NEW_PREDICATE_1, NEW_OBJECT_1)
+    # try to delete the triple
+    result = db.triple_delete(
+        (SUB_1, PRED_1, OBJ_1),
+        named_graph=named_graph,
+    )
+    assert result is True
+
+    # try to delete the triple again
+    result = db.triple_delete(
+        (SUB_1, PRED_1, OBJ_1),
+        named_graph=named_graph,
+    )
+    assert result is False
+
+    # if we dont check for existence it shoud return True
+    result = db.triple_delete(
+        (SUB_1, PRED_1, OBJ_1),
+        check_exist=False,
+        named_graph=named_graph,
+    )
     assert result is True
 
 
-def test_update_triple_only_subject(db: GraphDB):
+def test_add_and_delete_multiple_triples(db: GraphDB, named_graph: str):
+    # add multiple triples
+    result = db.triples_add(
+        [
+            (SUB_1, PRED_1, OBJ_1),
+            (SUB_2, PRED_2, OBJ_2),
+        ],
+        named_graph=named_graph,
+    )
+    assert result is True
+
+    # try to delete the triples
+    result = db.triples_delete(
+        [
+            (SUB_1, PRED_1, OBJ_1),
+            (SUB_2, PRED_2, OBJ_2),
+        ],
+        named_graph=named_graph,
+    )
+    assert result is True
+
+    # try to delete the triples again
+    result = db.triples_delete(
+        [
+            (SUB_1, PRED_1, OBJ_1),
+            (SUB_2, PRED_2, OBJ_2),
+        ],
+        named_graph=named_graph,
+    )
+    assert result is False
+
+    # if we dont check for existence it shoud return True
+    result = db.triples_delete(
+        [
+            (SUB_1, PRED_1, OBJ_1),
+            (SUB_2, PRED_2, OBJ_2),
+        ],
+        check_exist=False,
+        named_graph=named_graph,
+    )
+    assert result is True
+
+
+def test_update_triple(db: GraphDB, named_graph: str):
     # Add a new triple
-    result = db.triple_add(SUBJECT_1, PREDICATE_1, OBJECT_1)
+    result = db.triple_add(
+        (SUB_1, PRED_1, OBJ_1),
+        named_graph=named_graph,
+    )
+    assert result is True
+
+    # Input errors
+    # no new given
+    with pytest.raises(InvalidInputError):
+        db.triple_update(
+            old_triple=(SUB_1, PRED_1, OBJ_1),
+            named_graph=named_graph,
+        )
+
+    # both new given
+    with pytest.raises(InvalidInputError):
+        db.triple_update(
+            old_triple=(SUB_1, PRED_1, OBJ_1),
+            new_triple=(NEW_SUB_1, NEW_PRED_1, NEW_OBJ_1),
+            new_sub=NEW_SUB_1,
+            named_graph=named_graph,
+        )
+
+    # old is incomplete
+    with pytest.raises(InvalidInputError):
+        db.triple_update(
+            old_triple=(SUB_1, PRED_1, None),
+            new_triple=(NEW_SUB_1, NEW_PRED_1, NEW_OBJ_1),
+            named_graph=named_graph,
+        )
+
+    # try to update the full triple
+    result = db.triple_update(
+        old_triple=(SUB_1, PRED_1, OBJ_1),
+        new_triple=(NEW_SUB_1, NEW_PRED_1, NEW_OBJ_1),
+        named_graph=named_graph,
+    )
+    assert result is True
+
+    # try to update the individual entries
+    result = db.triple_update(
+        old_triple=(NEW_SUB_1, NEW_PRED_1, NEW_OBJ_1),
+        new_sub=SUB_1,
+        named_graph=named_graph,
+    )
+    assert result is True
+
+    result = db.triple_update(
+        old_triple=(SUB_1, NEW_PRED_1, NEW_OBJ_1),
+        new_pred=PRED_1,
+        named_graph=named_graph,
+    )
+    assert result is True
+
+    result = db.triple_update(
+        old_triple=(SUB_1, PRED_1, NEW_OBJ_1),
+        new_obj=OBJ_1,
+        named_graph=named_graph,
+    )
+    assert result is True
+
+    # adressing via individual arguments
+    result = db.triple_update(
+        (SUB_1, PRED_1, OBJ_1),
+        new_sub=NEW_SUB_1,
+        new_pred=NEW_PRED_1,
+        new_obj=NEW_OBJ_1,
+        named_graph=named_graph,
+    )
+    assert result is True
+
+    # Cleanup
+    result = db.triple_delete(
+        (NEW_SUB_1, NEW_PRED_1, NEW_OBJ_1),
+        named_graph=named_graph,
+    )
+    assert result is True
+
+
+def test_update_triple_only_subject(db: GraphDB, named_graph: str):
+    # Add a new triple
+    result = db.triple_add(
+        (SUB_1, PRED_1, OBJ_1),
+        named_graph=named_graph,
+    )
     assert result is True
 
     # only update the subject of the triple
     result = db.triple_update(
-        sub_old=SUBJECT_1,
-        pred_old=PREDICATE_1,
-        obj_old=OBJECT_1,
-        sub_new=NEW_SUBJECT_1,
+        old_triple=(SUB_1, PRED_1, OBJ_1),
+        new_triple=(NEW_SUB_1, None, None),
+        named_graph=named_graph,
     )
     assert result is True
 
     # try to delete the triple
-    result = db.triple_delete(NEW_SUBJECT_1, PREDICATE_1, OBJECT_1)
+    result = db.triple_delete(
+        (NEW_SUB_1, PRED_1, OBJ_1),
+        named_graph=named_graph,
+    )
     assert result is True
 
 
-def test_update_triple_only_predicate(db: GraphDB):
+def test_update_triple_only_predicate(db: GraphDB, named_graph: str):
     # Add a new triple
-    result = db.triple_add(SUBJECT_1, PREDICATE_1, OBJECT_1)
+    result = db.triple_add(
+        (SUB_1, PRED_1, OBJ_1),
+        named_graph=named_graph,
+    )
     assert result is True
 
     # only update the predicate of the triple
     result = db.triple_update(
-        sub_old=SUBJECT_1,
-        pred_old=PREDICATE_1,
-        obj_old=OBJECT_1,
-        pred_new=NEW_PREDICATE_1,
+        old_triple=(SUB_1, PRED_1, OBJ_1),
+        new_triple=(None, NEW_PRED_1, None),
+        named_graph=named_graph,
     )
     assert result is True
 
     # try to delete the triple
-    result = db.triple_delete(SUBJECT_1, NEW_PREDICATE_1, OBJECT_1)
+    result = db.triple_delete(
+        (SUB_1, NEW_PRED_1, OBJ_1),
+        named_graph=named_graph,
+    )
     assert result is True
 
 
-def test_update_triple_only_object(db: GraphDB):
+def test_update_triple_only_object(db: GraphDB, named_graph: str):
     # Add a new triple
-    result = db.triple_add(SUBJECT_1, PREDICATE_1, OBJECT_1)
+    result = db.triple_add(
+        (SUB_1, PRED_1, OBJ_1),
+        named_graph=named_graph,
+    )
     assert result is True
 
     # only update the object of the triple
     result = db.triple_update(
-        sub_old=SUBJECT_1,
-        pred_old=PREDICATE_1,
-        obj_old=OBJECT_1,
-        obj_new=NEW_OBJECT_1,
+        old_triple=(SUB_1, PRED_1, OBJ_1),
+        new_triple=(None, None, NEW_OBJ_1),
+        named_graph=named_graph,
     )
     assert result is True
 
     # try to delete the triple
-    result = db.triple_delete(SUBJECT_1, PREDICATE_1, NEW_OBJECT_1)
+    result = db.triple_delete(
+        (SUB_1, PRED_1, NEW_OBJ_1),
+        named_graph=named_graph,
+    )
     assert result is True
 
 
-def test_update_multiple_triples(db: GraphDB):
+def test_update_multiple_triples(db: GraphDB, named_graph: str):
     # add multiple triples
-    result = db.triples_add(LIST_OF_TRIPLES)
+    result = db.triples_add(
+        [
+            (SUB_1, PRED_1, OBJ_1),
+            (SUB_2, PRED_2, OBJ_2),
+        ],
+        named_graph=named_graph,
+    )
     assert result is True
 
     # update multiple triples
     result = db.triples_update(
-        old_triples=LIST_OF_TRIPLES,
-        new_triples=LIST_OF_NEW_TRIPLES,
+        old_triples=[
+            (SUB_1, PRED_1, OBJ_1),
+            (SUB_2, PRED_2, OBJ_2),
+        ],
+        new_triples=[
+            (NEW_SUB_1, NEW_PRED_1, NEW_OBJ_1),
+            (NEW_SUB_2, NEW_PRED_2, NEW_OBJ_2),
+        ],
+        named_graph=named_graph,
     )
     assert result is True
 
     # try to delete the new triples
-    result = db.triples_delete(LIST_OF_NEW_TRIPLES)
+    result = db.triples_delete(
+        [
+            (NEW_SUB_1, NEW_PRED_1, NEW_OBJ_1),
+            (NEW_SUB_2, NEW_PRED_2, NEW_OBJ_2),
+        ],
+        named_graph=named_graph,
+    )
     assert result is True
 
 
-def test_iri_exists(db: GraphDB):
+def test_iri_exists(db: GraphDB, named_graph: str):
     # add a new triple to the default graph
-    result = db.triple_add(SUBJECT_1, PREDICATE_1, OBJECT_1)
+    result = db.triple_add(
+        (SUB_1, PRED_1, OBJ_1),
+        named_graph=named_graph,
+    )
     assert result is True
 
     # does not specify any part of a triple to look for
     with pytest.raises(InvalidInputError):
-        db.iri_exists(iri=SUBJECT_1)
+        db.iri_exists(
+            iri=SUB_1,
+            named_graph=named_graph,
+        )
 
     # IRI should exist like this
     result = db.iri_exists(
-        iri=SUBJECT_1,
+        iri=SUB_1,
         as_sub=True,
         include_explicit=True,
         include_implicit=False,
+        named_graph=named_graph,
     )
     assert result is True
 
-    result = db.iri_exists(SUBJECT_1, as_sub=True, as_pred=True)
+    result = db.iri_exists(
+        SUB_1,
+        as_sub=True,
+        as_pred=True,
+        named_graph=named_graph,
+    )
     assert result is False
 
-    result = db.iri_exists(PREDICATE_1, as_pred=True)
+    result = db.iri_exists(
+        PRED_1,
+        as_pred=True,
+        named_graph=named_graph,
+    )
     assert result is True
 
     result = db.iri_exists(
-        SUBJECT_1,
+        SUB_1,
         as_obj=True,
         include_explicit=True,
         include_implicit=False,
+        named_graph=named_graph,
     )
     assert result is False
 
     result = db.iri_exists(
-        SUBJECT_1,
+        SUB_1,
         as_pred=True,
         include_explicit=True,
         include_implicit=False,
+        named_graph=named_graph,
     )
     assert result is False
 
-    result = db.triple_delete(SUBJECT_1, PREDICATE_1, OBJECT_1)
+    result = db.triple_delete(
+        (SUB_1, PRED_1, OBJ_1),
+        named_graph=named_graph,
+    )
     assert result is True
 
 
-def test_convenience_functions(db: GraphDB):
-    subject = "<http://example.org/instance>"
-    predicate = "rdfs:subClassOf"
-    object = "<http://example.org/myClass>"
-
-    result = db.triple_add(subject, predicate, object)
-    assert result is True
-
-    result = db.triple_add(subject, "rdf:type", "owl:NamedIndividual")
-    assert result is True
-
-    result = db.triple_add(subject, "rdf:type", object)
-    assert result is True
-
-    result = db.triple_add(object, "rdf:type", "owl:Class")
-    assert result is True
-
-    result = db.is_subclass(subject, object)
-    assert result is True
-
-    result = db.is_subclass(subject, "<http://example.org/someNonExistingClass>")
+def test_triple_exists(db: GraphDB, named_graph: str):
+    # Test return on empty DB
+    result = db.triple_exists(
+        (SUB_1, PRED_1, OBJ_1),
+        named_graph=named_graph,
+    )
     assert result is False
 
-    result = db.owl_is_named_individual(subject)
+    # Add triple
+    result = db.triple_add(
+        (SUB_1, PRED_1, OBJ_1),
+        named_graph=named_graph,
+    )
     assert result is True
 
-    result = db.owl_is_named_individual(predicate)
+    # Test if triple is now found
+    result = db.triple_exists(
+        (SUB_1, PRED_1, OBJ_1),
+        named_graph=named_graph,
+    )
+    assert result is True
+
+    # Test if modified triple is not found
+    result = db.triple_exists(
+        (SUB_2, PRED_1, OBJ_1),
+        named_graph=named_graph,
+    )
     assert result is False
 
-    classes = db.owl_get_classes_of_individual(subject, local_name=False)
-    assert classes == [utils.strip_angle_brackets(object)]
+    result = db.triple_exists(
+        (SUB_1, PRED_2, OBJ_1),
+        named_graph=named_graph,
+    )
+    assert result is False
 
-    classes = db.owl_get_classes_of_individual(subject, local_name=True)
-    assert classes == [utils.get_local_name(object)]
+    result = db.triple_exists(
+        (SUB_1, PRED_1, OBJ_2),
+        named_graph=named_graph,
+    )
+    assert result is False
 
-    classes = db.owl_get_classes_of_individual(object, local_name=False)
+    # Cleanup
+    result = db.triple_delete(
+        (SUB_1, PRED_1, OBJ_1),
+        named_graph=named_graph,
+    )
+    assert result is True
+
+
+def test_multi_triple_exists(db: GraphDB, named_graph: str):
+    # Test return on empty DB
+    result = db.any_triple_exists(
+        [
+            (SUB_1, PRED_1, OBJ_1),
+            (SUB_2, PRED_2, OBJ_2),
+        ],
+        named_graph=named_graph,
+    )
+    assert result is False
+
+    result = db.all_triple_exists(
+        [
+            (SUB_1, PRED_1, OBJ_1),
+            (SUB_2, PRED_2, OBJ_2),
+        ],
+        named_graph=named_graph,
+    )
+    assert result is False
+
+    # Add first and unrelated triple
+    result = db.triples_add(
+        [
+            (SUB_1, PRED_1, OBJ_1),
+            (NEW_SUB_1, NEW_PRED_1, NEW_OBJ_1),
+        ],
+        named_graph=named_graph,
+    )
+    assert result is True
+
+    # One triple now matches
+    result = db.any_triple_exists(
+        [
+            (SUB_1, PRED_1, OBJ_1),
+            (SUB_2, PRED_2, OBJ_2),
+        ],
+        named_graph=named_graph,
+    )
+    assert result is True
+
+    result = db.all_triple_exists(
+        [
+            (SUB_1, PRED_1, OBJ_1),
+            (SUB_2, PRED_2, OBJ_2),
+        ],
+        named_graph=named_graph,
+    )
+    assert result is False
+
+    # Add second triple
+    result = db.triple_add(
+        (SUB_2, PRED_2, OBJ_2),
+        named_graph=named_graph,
+    )
+    assert result is True
+
+    # One triple now matches
+    result = db.any_triple_exists(
+        [
+            (SUB_1, PRED_1, OBJ_1),
+            (SUB_2, PRED_2, OBJ_2),
+        ],
+        named_graph=named_graph,
+    )
+    assert result is True
+
+    result = db.all_triple_exists(
+        [
+            (SUB_1, PRED_1, OBJ_1),
+            (SUB_2, PRED_2, OBJ_2),
+        ],
+        named_graph=named_graph,
+    )
+    assert result is True
+
+    # Cleanup
+    result = db.triples_delete(
+        [
+            (SUB_1, PRED_1, OBJ_1),
+            (SUB_2, PRED_2, OBJ_2),
+            (NEW_SUB_1, NEW_PRED_1, NEW_OBJ_1),
+        ],
+        named_graph=named_graph,
+    )
+    assert result is True
+
+
+def test_convenience_functions(db: GraphDB, named_graph: str):
+    sub = "http://example.org#instance"
+    pred = "rdfs:subClassOf"
+    obj = "http://example.org#myClass"
+
+    result = db.triple_add(
+        (sub, pred, obj),
+        named_graph=named_graph,
+    )
+    assert result is True
+
+    result = db.triple_add(
+        (sub, "rdf:type", "owl:NamedIndividual"),
+        named_graph=named_graph,
+    )
+    assert result is True
+
+    result = db.triple_add(
+        (sub, "rdf:type", obj),
+        named_graph=named_graph,
+    )
+    assert result is True
+
+    result = db.triple_add(
+        (obj, "rdf:type", "owl:Class"),
+        named_graph=named_graph,
+    )
+    assert result is True
+
+    result = db.is_subclass(
+        sub,
+        obj,
+        named_graph=named_graph,
+    )
+    assert result is True
+
+    result = db.is_subclass(
+        sub,
+        "http://example.org#someNonExistingClass",
+        named_graph=named_graph,
+    )
+    assert result is False
+
+    result = db.owl_is_named_individual(
+        sub,
+        named_graph=named_graph,
+    )
+    assert result is True
+
+    result = db.owl_is_named_individual(
+        pred,
+        named_graph=named_graph,
+    )
+    assert result is False
+
+    classes = db.owl_get_classes_of_individual(
+        sub,
+        local_name=False,
+        named_graph=named_graph,
+    )
+    assert classes == [obj]
+
+    classes = db.owl_get_classes_of_individual(
+        sub,
+        local_name=True,
+        named_graph=named_graph,
+    )
+    assert classes == [utils.get_local_name(obj)]
+
+    classes = db.owl_get_classes_of_individual(
+        obj,
+        local_name=False,
+        named_graph=named_graph,
+    )
     assert classes == []
 
-    result = db.triple_delete(subject, predicate, object)
+    result = db.triple_delete(
+        (sub, pred, obj),
+        named_graph=named_graph,
+    )
     assert result is True
 
-    result = db.triple_delete(subject, "rdf:type", "owl:NamedIndividual")
+    result = db.triple_delete(
+        (sub, "rdf:type", "owl:NamedIndividual"),
+        named_graph=named_graph,
+    )
     assert result is True
 
-    result = db.triple_delete(subject, "rdf:type", object)
+    result = db.triple_delete(
+        (sub, "rdf:type", obj),
+        named_graph=named_graph,
+    )
     assert result is True
 
-    result = db.triple_delete(object, "rdf:type", "owl:Class")
+    result = db.triple_delete(
+        (obj, "rdf:type", "owl:Class"),
+        named_graph=named_graph,
+    )
     assert result is True
 
 
-def test_prefix_management(db: GraphDB):
-    """Test add_prefix, remove_prefix, and get_prefixes functionality"""
+def test_iri_generation(db: GraphDB, named_graph: str):
+    counter = itertools.count()
+    valid_iri_schema = lambda base: f"{base}#{counter.__next__()}"
+    invalid_iri_schema = lambda base: f"{base}#fixed"
+    valid_genid_schema = lambda: f"blank-{counter.__next__()}"
+    invalid_genid_schema = lambda: "fixed-blank"
 
-    # Get initial prefixes (should include default prefixes: owl, rdf, rdfs, onto)
-    initial_prefixes = db.get_prefixes()
-    assert isinstance(initial_prefixes, dict)
-    assert "owl" in initial_prefixes
-    assert "rdf" in initial_prefixes
-    assert "rdfs" in initial_prefixes
-    assert "onto" in initial_prefixes
-    initial_count = len(initial_prefixes)
+    base_no_fragment = "http://example.org"
+    base_with_fragment = "http://example.org#ClassName"
 
-    # Test add_prefix with full IRI
-    db.add_prefix("ex", "<http://example.org/>")
-    prefixes = db.get_prefixes()
-    assert "ex" in prefixes
-    assert prefixes["ex"] == "<http://example.org/>"
-    assert len(prefixes) == initial_count + 1
+    # Generate a new IRI
+    iri1 = db.new_iri(
+        base=base_no_fragment,
+    )
+    assert isinstance(iri1, IRI)
+    assert iri1.onto == "http://example.org"
 
-    # Test add_prefix with IRI without angle brackets (should add them)
-    db.add_prefix("test", "http://test.org/")
-    prefixes = db.get_prefixes()
-    assert "test" in prefixes
-    assert prefixes["test"] == "<http://test.org/>"
-    assert len(prefixes) == initial_count + 2
+    # Ensure uniqueness
+    iri2 = db.new_iri(
+        base=base_no_fragment,
+    )
+    assert iri1 != iri2
 
-    # Test overwriting an existing prefix
-    db.add_prefix("ex", "<http://example.com/>")
-    prefixes = db.get_prefixes()
-    assert prefixes["ex"] == "<http://example.com/>"
-    assert len(prefixes) == initial_count + 2  # Count shouldn't increase
+    # Generate with fragment base
+    iri3 = db.new_iri(
+        base=base_with_fragment,
+    )
+    assert isinstance(iri3, IRI)
+    assert iri3.onto == "http://example.org"
+    assert iri3.fragment.startswith("ClassName-")
 
-    # Test remove_prefix for existing prefix
-    result = db.remove_prefix("ex")
-    assert result is True
-    prefixes = db.get_prefixes()
-    assert "ex" not in prefixes
-    assert len(prefixes) == initial_count + 1
+    # Ensure uniqueness
+    iri4 = db.new_iri(
+        base=base_with_fragment,
+    )
+    assert iri3 != iri4
 
-    # Test remove_prefix for non-existing prefix
-    result = db.remove_prefix("nonexistent")
-    assert result is False
+    # Generate with schema
+    iri5 = db.new_iri(
+        base=base_no_fragment,
+        schema=valid_iri_schema,
+    )
+    assert isinstance(iri5, IRI)
+    assert iri5.onto == "http://example.org"
+    assert iri1 != iri5
 
-    # Test remove_prefix for another existing prefix
-    result = db.remove_prefix("test")
-    assert result is True
-    prefixes = db.get_prefixes()
-    assert "test" not in prefixes
-    assert len(prefixes) == initial_count
+    iri6 = db.new_iri(
+        base=base_no_fragment,
+        schema=valid_iri_schema,
+    )
+    assert iri5 != iri6
 
-    # Verify default prefixes are still intact
-    assert "owl" in prefixes
-    assert "rdf" in prefixes
-    assert "rdfs" in prefixes
-    assert "onto" in prefixes
+    # Invalid schema that does not produce unique IRIs
+    with pytest.raises(ValueError):
+        db.new_iri(
+            base=base_no_fragment,
+            schema=invalid_iri_schema,
+        )
+
+    # Generate blank node IDs
+    genid1 = db.new_blank_id()
+    assert isinstance(genid1, str)
+
+    genid2 = db.new_blank_id()
+    assert genid1 != genid2
+
+    # Generate with schema
+    genid3 = db.new_blank_id(
+        schema=valid_genid_schema,
+    )
+    assert isinstance(genid3, str)
+    assert genid1 != genid3
+
+    genid4 = db.new_blank_id(
+        schema=valid_genid_schema,
+    )
+    assert genid3 != genid4
+
+    # Invalid schema that does not produce unique blank IDs
+    with pytest.raises(ValueError):
+        db.new_blank_id(
+            schema=invalid_genid_schema,
+        )

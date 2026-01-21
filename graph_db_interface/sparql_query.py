@@ -1,6 +1,8 @@
 from enum import Enum
-from typing import List, Optional, Dict, Tuple
+from typing import List, Optional
 from graph_db_interface.utils import utils
+from graph_db_interface.utils.iri import IRI
+from graph_db_interface.utils.types import TriplesLike, GraphNameLike
 
 
 class SPARQLQueryType(Enum):
@@ -19,42 +21,91 @@ class SPARQLQueryType(Enum):
 
 
 class SPARQLQuery:
+    """
+    Helper for composing and validating SPARQL queries.
+
+    Builds SELECT/ASK and UPDATE blocks (INSERT/DELETE) with optional default
+    named graph and control over explicit/implicit inference.
+    """
+
     def __init__(
         self,
-        named_graph: Optional[str] = None,
-        prefixes: Optional[Dict[str, str]] = None,
-        include_explicit: bool = True,
-        include_implicit: bool = True,
+        named_graph: Optional[GraphNameLike] = None,
+        include_explicit: Optional[bool] = True,
+        include_implicit: Optional[bool] = True,
     ):
-        self._named_graph = named_graph
-        self._prefixes = prefixes
+        self._named_graph = IRI(named_graph) if named_graph is not None else None
         self._include_explicit = include_explicit
         self._include_implicit = include_implicit
         self._query_blocks = []
+
+    @classmethod
+    def select(
+        cls,
+        variables: List[str],
+        where_clauses: List[str],
+        select_type: Optional[SPARQLQueryType] = SPARQLQueryType.SELECT,
+        **kwargs,
+    ) -> "SPARQLQuery":
+        """
+        Create a new SPARQLQuery instance with a SELECT block.
+        Refer to `add_select_block` for details.
+        """
+        query = cls(**kwargs)
+        query.add_select_block(variables, where_clauses, select_type)
+        return query
 
     def add_select_block(
         self,
         variables: List[str],
         where_clauses: List[str],
-        select_type: SPARQLQueryType = SPARQLQueryType.SELECT,
-    ) -> str:
+        select_type: Optional[SPARQLQueryType] = SPARQLQueryType.SELECT,
+    ) -> None:
+        """
+        Add a SELECT block to the query.
+
+        Args:
+            variables (List[str]): Variable names to project (e.g., ["?s", "?p", "?o"]).
+            where_clauses (List[str]): WHERE patterns/filters to include.
+            select_type (Optional[SPARQLQueryType]): SELECT variant (e.g., DISTINCT). Defaults to SELECT.
+        """
         block_parts = []
         block_parts.append(
             f"{select_type.value} {self._create_variable_string(variables)}"
         )
         part = self._add_explicit_implicit()
         if self._named_graph:
-            block_parts.append(f"FROM {utils.ensure_absolute(self._named_graph)}")
+            block_parts.append(f"FROM {self._named_graph.n3()}")
         if part:
             block_parts.append(part)
         block_parts.append(f"WHERE {{{self._combine_where_clauses(where_clauses)}}}")
         block = "\n".join(block_parts)
         self._query_blocks.append({"type": select_type, "data": block})
 
+    @classmethod
+    def ask(
+        cls,
+        where_clauses: List[str],
+        **kwargs,
+    ) -> "SPARQLQuery":
+        """
+        Create a new SPARQLQuery instance with a ASK block.
+        Refer to `add_ask_block` for details.
+        """
+        query = cls(**kwargs)
+        query.add_ask_block(where_clauses)
+        return query
+
     def add_ask_block(
         self,
         where_clauses: List[str],
-    ) -> str:
+    ) -> None:
+        """
+        Add an ASK block to the query.
+
+        Args:
+            where_clauses (List[str]): WHERE patterns/filters to include.
+        """
         block_parts = []
         block_parts.append("ASK")
         part = self._add_explicit_implicit()
@@ -70,13 +121,34 @@ WHERE {{
         block = "\n".join(block_parts)
         self._query_blocks.append({"type": SPARQLQueryType.ASK, "data": block})
 
+    @classmethod
+    def insert_data(
+        cls,
+        triples: TriplesLike,
+        **kwargs,
+    ) -> "SPARQLQuery":
+        """
+        Create a new SPARQLQuery instance with an INSERT DATA block.
+        Refer to `add_insert_data_block` for details.
+        """
+        query = cls(**kwargs)
+        query.add_insert_data_block(triples)
+        return query
+
     def add_insert_data_block(
         self,
-        triples: List[Tuple[str]],
-    ) -> str:
+        triples: TriplesLike,
+    ) -> None:
+        """
+        Add an INSERT DATA block comprised of triples.
+
+        Args:
+            triples (TriplesLike): Triples to insert.
+        """
         block_parts = []
         data_combined = "\n".join(
-            f"{triple[0]} {triple[1]} {triple[2]} ." for triple in triples
+            utils.triple_to_string(utils.sanitize_triple(triple), ".")
+            for triple in triples
         )
         block_parts.append(
             f"""INSERT DATA {{
@@ -87,13 +159,34 @@ WHERE {{
         block = "\n".join(block_parts)
         self._query_blocks.append({"type": SPARQLQueryType.INSERT_DATA, "data": block})
 
+    @classmethod
+    def insert_exists(
+        cls,
+        triples: TriplesLike,
+        **kwargs,
+    ) -> "SPARQLQuery":
+        """
+        Create a new SPARQLQuery instance with an INSERT ... WHERE NOT EXISTS block.
+        Refer to `add_insert_exists_block` for details.
+        """
+        query = cls(**kwargs)
+        query.add_insert_exists_block(triples)
+        return query
+
     def add_insert_exists_block(
         self,
-        triples: List[Tuple[str]],
-    ) -> str:
+        triples: TriplesLike,
+    ) -> None:
+        """
+        Add an INSERT ... WHERE NOT EXISTS block.
+
+        Args:
+            triples (TriplesLike): Triples to insert when they do not already exist.
+        """
         block_parts = []
         data_combined = "\n".join(
-            f"{triple[0]} {triple[1]} {triple[2]} ." for triple in triples
+            utils.triple_to_string(utils.sanitize_triple(triple), ".")
+            for triple in triples
         )
         block_parts.append(
             f"""INSERT {{
@@ -109,13 +202,34 @@ WHERE {{ FILTER NOT EXISTS {{
             {"type": SPARQLQueryType.INSERT_EXISTS, "data": block}
         )
 
+    @classmethod
+    def delete_data(
+        cls,
+        triples: TriplesLike,
+        **kwargs,
+    ) -> "SPARQLQuery":
+        """
+        Create a new SPARQLQuery instance with a DELETE DATA block.
+        Refer to `add_delete_data_block` for details.
+        """
+        query = cls(**kwargs)
+        query.add_delete_data_block(triples)
+        return query
+
     def add_delete_data_block(
         self,
-        triples: List[Tuple[str]],
-    ) -> str:
+        triples: TriplesLike,
+    ) -> None:
+        """
+        Add a DELETE DATA block comprised of triples.
+
+        Args:
+            triples (TriplesLike): Triples to delete.
+        """
         block_parts = []
         data_combined = "\n".join(
-            f"{triple[0]} {triple[1]} {triple[2]} ." for triple in triples
+            utils.triple_to_string(utils.sanitize_triple(triple), ".")
+            for triple in triples
         )
         block_parts.append(
             f"""DELETE DATA {{
@@ -126,22 +240,52 @@ WHERE {{ FILTER NOT EXISTS {{
         block = "\n".join(block_parts)
         self._query_blocks.append({"type": SPARQLQueryType.DELETE_DATA, "data": block})
 
+    @classmethod
+    def delete_insert_data(
+        cls,
+        delete_triples: TriplesLike,
+        insert_triples: TriplesLike,
+        where_clauses: List[str],
+        **kwargs,
+    ) -> "SPARQLQuery":
+        """
+        Create a new SPARQLQuery instance with a DELETE DATA block.
+        Refer to `add_delete_insert_data_block` for details.
+        """
+        query = cls(**kwargs)
+        query.add_delete_insert_data_block(
+            delete_triples,
+            insert_triples,
+            where_clauses,
+        )
+        return query
+
     def add_delete_insert_data_block(
         self,
-        delete_triples: List[Tuple[str]],
-        insert_triples: List[Tuple[str]],
+        delete_triples: TriplesLike,
+        insert_triples: TriplesLike,
         where_clauses: List[str],
-    ):
+    ) -> None:
+        """
+        Add a combined DELETE/INSERT block with WHERE.
+
+        Args:
+            delete_triples (TriplesLike): Triples to delete.
+            insert_triples (TriplesLike): Triples to insert.
+            where_clauses (List[str]): WHERE patterns selecting the triples to update.
+        """
         block_parts = []
         if self._named_graph:
-            block_parts.append(f"WITH {utils.ensure_absolute(self._named_graph)}")
+            block_parts.append(f"WITH {self._named_graph.n3()}")
         delete_triples_combined = "\n".join(
-            f"{triple[0]} {triple[1]} {triple[2]} ." for triple in delete_triples
+            utils.triple_to_string(utils.sanitize_triple(triple), ".")
+            for triple in delete_triples
         )
         block_parts.append(f"DELETE {{{delete_triples_combined}}}")
 
         insert_triples_combined = "\n".join(
-            f"{triple[0]} {triple[1]} {triple[2]} ." for triple in insert_triples
+            utils.triple_to_string(utils.sanitize_triple(triple), ".")
+            for triple in insert_triples
         )
         block_parts.append(f"INSERT {{{insert_triples_combined}}}")
 
@@ -151,36 +295,69 @@ WHERE {{ FILTER NOT EXISTS {{
             {"type": SPARQLQueryType.DELETE_INSERT, "data": block}
         )
 
-    def _create_variable_string(self, variables: List[str]) -> str:
-        """Create a string representation of the variables for the SELECT query."""
+    def _create_variable_string(
+        self,
+        variables: List[str],
+    ) -> str:
+        """
+        Create a string representation of projected variables.
+
+        Args:
+            variables (List[str]): Variables to project.
+
+        Returns:
+            str: Space-separated variables or "*" if empty.
+        """
         return " ".join(variables) if variables else "*"
 
-    def _combine_where_clauses(self, where_clauses: List[str]) -> str:
+    def _combine_where_clauses(
+        self,
+        where_clauses: List[str],
+    ) -> str:
+        """
+        Combine WHERE clauses into a single string separated by newlines.
+
+        Args:
+            where_clauses (List[str]): WHERE clause strings.
+
+        Returns:
+            str: Combined WHERE content.
+        """
         if len(where_clauses) >= 1:
             return "\n".join(where_clauses)
         else:
             return ""
 
-    def _get_prefix_string(self) -> str:
-        return (
-            "\n".join(
-                f"PREFIX {prefix}: {iri}" for prefix, iri in self._prefixes.items()
-            )
-            + "\n"
-        )
-
     def _add_explicit_implicit(self) -> Optional[str]:
+        """
+        Generate a FROM clause for explicit/implicit inclusion.
+
+        Returns:
+            Optional[str]: A `FROM <...>` clause or `None` when both are included.
+        """
         if self._include_explicit and not self._include_implicit:
-            return "FROM onto:explicit"
+            return f"FROM <http://www.ontotext.com/explicit>"
         elif self._include_implicit and not self._include_explicit:
-            return "FROM onto:implicit"
+            return f"FROM <http://www.ontotext.com/implicit>"
         return None
 
-    def to_string(self, validate: bool = True) -> str:
-        query_parts = []
-        if self._prefixes:
-            query_parts.append(self._get_prefix_string())
+    def to_string(
+        self,
+        validate: Optional[bool] = True,
+    ) -> str:
+        """
+        Compose the full SPARQL string and optionally validate it.
 
+        Args:
+            validate (Optional[bool]): If True, validate the query or update structure.
+
+        Returns:
+            str: The composed query string.
+
+        Raises:
+            InvalidQueryError: If validation of the composed query fails.
+        """
+        query_parts = []
         for block in self._query_blocks:
             query_parts.append(block["data"])
 
