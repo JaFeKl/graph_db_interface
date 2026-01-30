@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import Union, Optional, Any
+from typing import Set, Tuple, Union, Optional, Any, Dict
 from rdflib import Literal, XSD, Dataset, BNode, URIRef
 from rdflib.plugins.sparql.processor import prepareQuery
 from graph_db_interface.exceptions import (
@@ -342,3 +342,60 @@ def encapsulate_named_graph(
     {content}
 }}"""
     return content
+
+
+def group_triples_by_bnode(triples: Set[Triple]) -> Tuple[Set[Triple]]:
+    """
+    Groups triples sharing blank nodes into connected components to ensure
+    blank node semantics are preserved within query scope.
+
+    Args:
+        triples (Set[Triple]): Triples to check.
+
+    Retruns:
+        Tuple[Set[Triple]]: A tuple of sets of related triples
+
+    Example:
+        ASK {
+            { <a> <p> <b> . }      # Independent triple
+            UNION
+            { <x> <q> _:b1 .
+            _:b1 <r> <y> . }     # Connected via blank node
+            UNION
+            { <m> <n> <o> . }      # Another independent triple
+        }
+    """
+    triple_groups: Dict[BNode, Set[Triple]] = {}
+
+    for triple in triples:
+        # Extract blank nodes in the triple
+        bnodes = set()
+        for elem in triple:
+            if isinstance(elem, BNode):
+                bnodes.add(elem)
+
+        if not bnodes:
+            # No blank nodes - independent triple
+            # Use triple itself as hashable key
+            triple_groups[triple] = {triple}
+            continue
+
+        containing_sets = [
+            triple_groups[bnode] for bnode in bnodes if bnode in triple_groups
+        ]
+        if not containing_sets:
+            # Create new group
+            containing_set = set()
+        else:
+            # Existing groups - merge if multiple
+            containing_set = containing_sets[0]
+            for set_to_merge in containing_sets[1:]:
+                containing_set |= set_to_merge
+
+        # Add triple to the containing group
+        containing_set.add(triple)
+        # Update bnode to group mapping - overwrite to merged group if needed
+        for bnode in bnodes:
+            triple_groups[bnode] = containing_set
+
+    return tuple(triple_groups.values())

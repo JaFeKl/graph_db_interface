@@ -1,6 +1,6 @@
 # To be imported into ..graph_db.py GraphDB class
 
-from typing import List, Union, Any, Optional, Tuple, TYPE_CHECKING
+from typing import Dict, List, Union, Any, Optional, Tuple, Set, TYPE_CHECKING
 from rdflib import BNode, Literal
 from graph_db_interface.utils import utils
 from graph_db_interface.utils.iri import IRI
@@ -13,6 +13,7 @@ from graph_db_interface.utils.types import (
     ObjectLike,
     GraphNameLike,
     TriplesLike,
+    Triple,
 )
 from graph_db_interface.exceptions import InvalidInputError
 
@@ -127,17 +128,38 @@ def any_triple_exists(
     if not triples:
         raise InvalidInputError(f"Cannot check existence of empty triple list.")
 
-    for triple in triples:
-        triple = utils.sanitize_triple(triple)
+    validated_triples = {utils.sanitize_triple(triple) for triple in triples}
 
-        if self.triple_exists(triple, named_graph=named_graph):
-            self.logger.debug(
-                f"At least this triple exists: ({utils.triple_to_string(triple)}), named_graph: {named_graph or "default"}, repository: {self._repository}"
-            )
-            return True
+    triple_groups = utils.group_triples_by_bnode(validated_triples)
+
+    # Build UNION patterns for ASK query
+    union_patterns = []
+    for group in triple_groups:
+        group_pattern = " .\n    ".join(
+            utils.triple_to_string(triple, "") for triple in group
+        )
+        union_patterns.append(f"{{\n    {group_pattern} .\n  }}")
+
+    where_clause = "\n  UNION\n  ".join(union_patterns)
+
+    query = SPARQLQuery.ask(
+        where_clauses=[where_clause],
+        named_graph=named_graph,
+    )
+    ask_result = self.query(query=query, update=False)
+    if ask_result is None:
+        raise InvalidInputError(
+            f"Could not query 'any_triple_exists' for triples, named_graph: {named_graph or 'default'}, repository: {self._repository}"
+        )
+
+    if ask_result["boolean"] is True:
+        self.logger.debug(
+            f"At least one of the triples exists, named_graph: {named_graph or 'default'}, repository: {self._repository}"
+        )
+        return True
 
     self.logger.debug(
-        f"None of the triples exists: ({triples}), named_graph: {named_graph or "default"}, repository: {self._repository}"
+        f"None of the triples exists, named_graph: {named_graph or 'default'}, repository: {self._repository}"
     )
     return False
 
@@ -157,6 +179,7 @@ def all_triple_exists(
     Returns:
         bool: True if all exist, False otherwise.
     """
+    self.logger.setLevel(10)
     named_graph = IRI(named_graph) if named_graph is not None else self.named_graph
 
     if not triples:
@@ -323,8 +346,8 @@ def triples_update(
     if not old_triples and not new_triples:
         return True
 
-    if len(old_triples) != len(new_triples):
-        raise InvalidInputError("Old and new triples lists must have the same length.")
+    # if len(old_triples) != len(new_triples):
+    #     raise InvalidInputError("Old and new triples lists must have the same length.")
 
     validated_old_triples = [utils.sanitize_triple(triple) for triple in old_triples]
     validated_new_triples = [utils.sanitize_triple(triple) for triple in new_triples]

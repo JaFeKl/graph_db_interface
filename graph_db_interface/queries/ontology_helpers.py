@@ -1,7 +1,7 @@
 # To be imported into ..graph_db.py GraphDB class
 import uuid
 
-from typing import List, Optional, Union, Callable, TYPE_CHECKING
+from typing import List, Optional, Set, Union, Callable, TYPE_CHECKING
 from graph_db_interface.utils import utils
 from graph_db_interface.utils.iri import IRI
 from graph_db_interface.utils.types import IRILike, GraphNameLike
@@ -200,7 +200,7 @@ def owl_get_classes_of_individual(
     include_explicit: Optional[bool] = True,
     include_implicit: Optional[bool] = False,
     named_graph: Optional[GraphNameLike] = None,
-) -> List[Union[IRI, str]]:
+) -> Set[Union[IRI, str]]:
     """
     Get the OWL classes associated with a given individual.
 
@@ -217,7 +217,7 @@ def owl_get_classes_of_individual(
         named_graph (Optional[GraphNameLike]): Override the client's default named graph.
 
     Returns:
-        List[Union[IRI, str]]: Class IRIs, or local names if `local_name=True`.
+        Set[Union[IRI, str]]: Class IRIs, or local names if `local_name=True`.
     """
     instance_iri = IRI(instance_iri)
     named_graph = IRI(named_graph) if named_graph is not None else self.named_graph
@@ -253,14 +253,14 @@ def owl_get_classes_of_individual(
     results = self.query(query=query, convert_bindings=True)
 
     if results is None:
-        return []
+        return set()
 
     if local_name:
-        classes = [
+        classes = {
             utils.get_local_name(result["class"])
             for result in results["results"]["bindings"]
-        ]
+        }
         return classes
 
-    classes = [result["class"] for result in results["results"]["bindings"]]
+    classes = {result["class"] for result in results["results"]["bindings"]}
     return classes
