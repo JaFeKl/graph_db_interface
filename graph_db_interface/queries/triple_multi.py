@@ -61,6 +61,8 @@ def triples_get(
         )
 
     named_graph = IRI(named_graph) if named_graph is not None else self.named_graph
+    if named_graph is not None and not hasattr(named_graph, "n3"):
+        named_graph = IRI(named_graph)
 
     sub, pred, obj = utils.sanitize_triple(
         triple or (sub, pred, obj), allow_partial=True
@@ -360,16 +362,74 @@ def triples_update(
         )
         return False
 
-    old_triple_strings = [
-        utils.triple_to_string(triple, ".") for triple in validated_old_triples
-    ]
+    def _render_term(
+        term: Any,
+        bn_map: Optional[Dict[BNode, str]] = None,
+        prefix: str = "",
+    ) -> str:
+        if isinstance(term, BNode):
+            if bn_map is None:
+                raise InvalidInputError(
+                    "Blank nodes in predicates are not supported for updates."
+                )
+            if term not in bn_map:
+                bn_map[term] = f"?{prefix}{len(bn_map) + 1}"
+            return bn_map[term]
+        if hasattr(term, "n3"):
+            return term.n3()
+        return IRI(term).n3()
 
-    query = SPARQLQuery.delete_insert_data(
-        delete_triples=validated_old_triples,
-        insert_triples=validated_new_triples,
-        where_clauses=old_triple_strings,
-        named_graph=named_graph,
+    def _build_patterns(
+        triples: List[Triple],
+        bn_map: Dict[BNode, str],
+        prefix: str,
+    ) -> List[str]:
+        patterns: List[str] = []
+        for subject, predicate, obj in triples:
+            subj_str = _render_term(subject, bn_map, prefix)
+            pred_str = _render_term(predicate)
+            obj_str = _render_term(obj, bn_map, prefix)
+            patterns.append(f"{subj_str} {pred_str} {obj_str} .")
+        return patterns
+
+    old_bn_var_map: Dict[BNode, str] = {}
+    new_bn_var_map: Dict[BNode, str] = {}
+
+    old_delete_patterns = _build_patterns(
+        validated_old_triples, old_bn_var_map, "oldbn"
     )
+    insert_patterns = _build_patterns(validated_new_triples, new_bn_var_map, "newbn")
+
+    def _format_block(patterns: List[str]) -> str:
+        if not patterns:
+            return ""
+        return "\n".join(f"  {pattern}" for pattern in patterns)
+
+    delete_block = _format_block(old_delete_patterns)
+    insert_block = _format_block(insert_patterns)
+
+    where_patterns = list(dict.fromkeys(old_delete_patterns))
+    where_block_parts: List[str] = []
+    if where_patterns:
+        where_block_parts.append(_format_block(where_patterns))
+    if new_bn_var_map:
+        where_block_parts.extend(
+            f"  BIND(BNODE() AS {var})" for var in new_bn_var_map.values()
+        )
+    where_block = "\n".join(where_block_parts)
+
+    graph_clause = f"WITH {named_graph.n3()}\n" if named_graph else ""
+
+    query = f"""{graph_clause}DELETE {{
+{delete_block}
+}}
+INSERT {{
+{insert_block}
+}}
+WHERE {{
+{where_block}
+}}
+""".strip()
     result = self.query(query=query, update=True)
     if not result:
         self.logger.warning(
