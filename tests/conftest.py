@@ -3,8 +3,6 @@ import sys
 import pytest
 from graph_db_interface import GraphDB, GraphDBCredentials
 
-REPOSITORY = "Tests"
-
 
 @pytest.fixture(scope="session")
 def db() -> GraphDB:
@@ -13,7 +11,7 @@ def db() -> GraphDB:
         "GRAPHDB_URL",
         "GRAPHDB_USERNAME",
         "GRAPHDB_PASSWORD",
-        "GRAPHDB_REPOSITORY",
+        "GRAPHDB_TEST_REPOSITORY",
     ]:
         if os.getenv(env_var) is None:
             print(f"Missing environment variable '{env_var}'.", file=sys.stderr)
@@ -23,7 +21,7 @@ def db() -> GraphDB:
         base_url=os.getenv("GRAPHDB_URL"),
         username=os.getenv("GRAPHDB_USERNAME"),
         password=os.getenv("GRAPHDB_PASSWORD"),
-        repository=REPOSITORY or os.getenv("GRAPHDB_REPOSITORY"),
+        repository=os.getenv("GRAPHDB_TEST_REPOSITORY"),
     )
 
     db = GraphDB(credentials=credentials)

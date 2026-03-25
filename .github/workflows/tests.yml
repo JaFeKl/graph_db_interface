@@ -16,6 +16,7 @@ jobs:
       GRAPHDB_REPOSITORY: test-repo
       GRAPHDB_USERNAME: admin
       GRAPHDB_PASSWORD: root
+      GRAPHDB_TEST_REPOSITORY: Tests
     
     services:
       graphdb:
