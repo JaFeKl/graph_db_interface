@@ -1,6 +1,6 @@
 # To be imported into ..graph_db.py GraphDB class
 
-from typing import Dict, List, Union, Any, Optional, Tuple, Set, TYPE_CHECKING
+from typing import Dict, List, Union, Any, Optional, Tuple, TYPE_CHECKING
 from rdflib import BNode, Literal
 from graph_db_interface.utils import utils
 from graph_db_interface.utils.iri import IRI
@@ -130,7 +130,7 @@ def any_triple_exists(
     if not triples:
         raise InvalidInputError(f"Cannot check existence of empty triple list.")
 
-    validated_triples = {utils.sanitize_triple(triple) for triple in triples}
+    validated_triples = [utils.sanitize_triple(triple) for triple in triples]
 
     triple_groups = utils.group_triples_by_bnode(validated_triples)
 
@@ -348,8 +348,8 @@ def triples_update(
     if not old_triples and not new_triples:
         return True
 
-    # if len(old_triples) != len(new_triples):
-    #     raise InvalidInputError("Old and new triples lists must have the same length.")
+    if len(old_triples) != len(new_triples):
+        raise InvalidInputError("Old and new triples lists must have the same length.")
 
     validated_old_triples = [utils.sanitize_triple(triple) for triple in old_triples]
     validated_new_triples = [utils.sanitize_triple(triple) for triple in new_triples]

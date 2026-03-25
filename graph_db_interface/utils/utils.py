@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import Set, Tuple, Union, Optional, Any, Dict
+from typing import List, Union, Optional, Any, Dict
 from rdflib import Literal, XSD, Dataset, BNode, URIRef
 from rdflib.plugins.sparql.processor import prepareQuery
 from graph_db_interface.exceptions import (
@@ -344,16 +344,16 @@ def encapsulate_named_graph(
     return content
 
 
-def group_triples_by_bnode(triples: Set[Triple]) -> Tuple[Set[Triple]]:
+def group_triples_by_bnode(triples: List[Triple]) -> List[List[Triple]]:
     """
     Groups triples sharing blank nodes into connected components to ensure
     blank node semantics are preserved within query scope.
 
     Args:
-        triples (Set[Triple]): Triples to check.
+        triples (List[Triple]): Triples to check.
 
-    Retruns:
-        Tuple[Set[Triple]]: A tuple of sets of related triples
+    Returns:
+        List[List[Triple]]: A list of lists of related triples
 
     Example:
         ASK {
@@ -365,7 +365,7 @@ def group_triples_by_bnode(triples: Set[Triple]) -> Tuple[Set[Triple]]:
             { <m> <n> <o> . }      # Another independent triple
         }
     """
-    triple_groups: Dict[BNode, Set[Triple]] = {}
+    triple_groups: Dict[BNode, List[Triple]] = {}
 
     for triple in triples:
         # Extract blank nodes in the triple
@@ -377,7 +377,7 @@ def group_triples_by_bnode(triples: Set[Triple]) -> Tuple[Set[Triple]]:
         if not bnodes:
             # No blank nodes - independent triple
             # Use triple itself as hashable key
-            triple_groups[triple] = {triple}
+            triple_groups[triple] = [triple]
             continue
 
         containing_sets = [
@@ -385,7 +385,7 @@ def group_triples_by_bnode(triples: Set[Triple]) -> Tuple[Set[Triple]]:
         ]
         if not containing_sets:
             # Create new group
-            containing_set = set()
+            containing_set = []
         else:
             # Existing groups - merge if multiple
             containing_set = containing_sets[0]
@@ -393,9 +393,9 @@ def group_triples_by_bnode(triples: Set[Triple]) -> Tuple[Set[Triple]]:
                 containing_set |= set_to_merge
 
         # Add triple to the containing group
-        containing_set.add(triple)
+        containing_set.append(triple)
         # Update bnode to group mapping - overwrite to merged group if needed
         for bnode in bnodes:
             triple_groups[bnode] = containing_set
 
-    return tuple(triple_groups.values())
+    return list(triple_groups.values())
