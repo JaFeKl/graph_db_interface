@@ -26,19 +26,39 @@ poetry install
 The package uses a single class named `GraphDB`. To use the interface, simply generate an object from this class:
 
 ```python
-from graph_db_interface import GraphDB
+from graph_db_interface import GraphDB, GraphDBCredentials
 
 credentials = GraphDBCredentials(
-    base_url=<your_graph_db_url>,
-    username=<your_graph_db_user>
-    password=<your_graph_db_password>
-    repository=<your_selected_repository_id>
+    base_url="<your_graph_db_url>",
+    username="<your_graph_db_user>",
+    password="<your_graph_db_password>",
+    repository="<your_selected_repository_id>",
 )
 
-myDB = GraphDB(
-    credentials=credentials
-)
+my_db = GraphDB(credentials=credentials)
 ```
+
+# Running Tests
+The test suite expects a running GraphDB instance and uses a dedicated test repository.
+
+Required environment variables for tests:
+
+- `GRAPHDB_URL`
+- `GRAPHDB_USERNAME`
+- `GRAPHDB_PASSWORD`
+- `GRAPHDB_TEST_REPOSITORY`
+
+Example:
+
+```bash
+export GRAPHDB_URL="http://localhost:7200"
+export GRAPHDB_USERNAME="admin"
+export GRAPHDB_PASSWORD="root"
+export GRAPHDB_TEST_REPOSITORY="test-repo"
+poetry run pytest tests -v
+```
+
+Note: application/runtime credentials loaded via `GraphDBCredentials.from_env()` still use `GRAPHDB_REPOSITORY` by default.
 
 # License
 
