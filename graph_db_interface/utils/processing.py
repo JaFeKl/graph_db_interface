@@ -1,4 +1,5 @@
 from typing import Optional, Any, Hashable
+from graph_db_interface.utils.utils import convert_multi_bindings_to_python_type
 
 
 def process_bindings_select(
@@ -6,75 +7,40 @@ def process_bindings_select(
     variables: Optional[list[str]] = None,
     grouping_variables: Optional[list[str]] = None,
 ) -> tuple[tuple[Any, ...], ...] | tuple[Any, ...] | dict:
-    """Process SPARQL bindings from a SELECT query into tuples or a nested dictionary structure.
+    """
+    Process SPARQL SELECT bindings into tuples or a nested dictionary.
 
-    This helper takes the raw SPARQL JSON bindings (``results.bindings``) and
-    converts them into a convenient Python structure.
+    Converts raw SPARQL JSON bindings (`results.bindings`) into a convenient Python
+    structure for downstream processing and display.
 
-    Parameters:
-        bindings (list[dict]): Raw bindings from SPARQL query results
-            (i.e., ``response['results']['bindings']``).
-        variables (Optional[list[str]]): Variable names (without leading ``?``)
-            that define the tuple entries and their order in the result.
-        grouping_variables (Optional[list[str]]): Grouping variable names (without leading ``?``)
+    Args:
+        bindings (list[dict[str, dict[str, Any]]]): Raw bindings from SPARQL query results
+            (i.e., `response['results']['bindings']`).
+        variables (Optional[list[str]]): Variable names (without leading `?`) that define the
+            tuple entries and their order in the result.
+        grouping_variables (Optional[list[str]]): Grouping variable names (without leading `?`)
             that define hierarchical dictionary keys in order. When provided, the result is a
-            nested dict keyed by the values of these variables, with leaves as described below.
+            nested dict keyed by these values, with leaves as described below.
 
     Returns:
-            tuple[tuple[Any, ...], ...] | tuple[Any, ...] | dict:
-                    When grouping_variables is not provided:
-                        - variables is empty or None -> () (empty tuple)
-                        - variables has length 1 -> (a1, a2, ...) (tuple of scalar values)
-                        - variables has length > 1 -> ((a1, b1, ...), (a2, b2, ...), ...) (tuple of tuples)
-                    When grouping_variables is provided:
-                        - Nested dict keyed by the values of grouping_variables (in order)
-                        - Each leaf is processed using the entries in variables (shapes as above)
+        tuple[tuple[Any, ...], ...] | tuple[Any, ...] | dict: When `grouping_variables` is not provided:
+            - variables is empty or None -> () (empty tuple)
+            - variables has length 1     -> (a1, a2, ...) (tuple of scalar values)
+            - variables has length > 1   -> ((a1, b1, ...), (a2, b2, ...), ...) (tuple of tuples)
+            When `grouping_variables` is provided:
+            - Nested dict keyed by the values of `grouping_variables` (in order)
+            - Each leaf is processed using the entries in `variables` (shapes as above)
 
     Raises:
-        AssertionError: If any of the values referenced by ``grouping_variables`` in the
-            first binding are not hashable. Keys in ``grouping_variables`` must map to hashable
-            values to be usable as dictionary keys.
-        TypeError: If the bindings are empty and neither ``variables`` nor ``grouping_variables`` are provided.
+        AssertionError: If any values referenced by `grouping_variables` in the first binding
+            are not hashable. Grouping keys must be hashable to serve as dict keys.
+        TypeError: If the bindings are empty and neither `variables` nor `grouping_variables` are provided.
 
     Notes:
-        - ``variables`` and ``grouping_variables`` are expected without the leading ``?``.
-        - If neither ``variables`` nor ``grouping_variables`` are provided, the ``variables`` are inferred from the bindings.
-
-    Example:
-    1) Without grouping:
-    ```
-    grouping_variables = None
-    variables = ["?machine", "?part", "?parameter", "?value"]
-    result -> (
-        ("machine1", "part1", "parameter1", "value1"),
-        ("machine1", "part1", "parameter2", "value2"),
-        ("machine1", "part2", "parameter1", "value3"),
-        ("machine1", "part2", "parameter2", "value4"),
-        ...
-    )
-    ```
-    2) With grouping:
-    ```
-    grouping_variables = ["?machine", "?part"]
-    variables = ["?parameter", "?value"]
-    result -> {
-        "machine1": {
-        "part1": (
-            ("parameter1", "value1"),
-            ("parameter2", "value2"),
-            ...
-        ),
-        "part2": (
-            ("parameter1", "value3"),
-            ("parameter2", "value4"),
-            ...
-        ),
-        ...
-        },
-        ...
-    }
-    ```
+        - `variables` and `grouping_variables` are expected without the leading `?`.
+        - If neither is provided, `variables` are inferred from the first binding when available.
     """
+    bindings = convert_multi_bindings_to_python_type(bindings)
 
     if not variables and not grouping_variables:
         assert bindings, TypeError(
@@ -86,19 +52,21 @@ def process_bindings_select(
     if not variables:
         extract_entry = lambda binding: None
     elif len(variables) == 1:
-        extract_entry = lambda binding: binding[variables[0]]["value"]
+        extract_entry = lambda binding: binding[variables[0]]
     else:
         extract_entry = lambda binding: tuple(
-            binding[variable]["value"] for variable in variables
+            binding[variable] for variable in variables
         )
 
     if not grouping_variables:
         return tuple(extract_entry(binding) for binding in bindings)
 
     else:  # Process with grouping variables
+        if not bindings:
+            return {}
+
         assert all(
-            isinstance(bindings[0][key]["value"], Hashable)
-            for key in grouping_variables
+            isinstance(bindings[0][key], Hashable) for key in grouping_variables
         ), TypeError("All datatypes in grouping_variables must be hashable.")
 
         result = {}
@@ -107,9 +75,9 @@ def process_bindings_select(
         for binding in bindings:
             leaf = result
             for key in grouping_variables[:-1]:
-                key_value = binding[key]["value"]
+                key_value = binding[key]
                 leaf = leaf.setdefault(key_value, {})
-            key_value = binding[grouping_variables[-1]]["value"]
+            key_value = binding[grouping_variables[-1]]
             leaf.setdefault(key_value, []).append(extract_entry(binding))
             leaf_dicts.append(leaf)
 

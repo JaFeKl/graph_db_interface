@@ -1,28 +1,38 @@
+from __future__ import annotations
+
 from base64 import b64encode
 from typing import List, Union, Optional, Dict
 from graph_db_interface.kafka.kafka_manager import KafkaManager
 import requests
 import logging
-import os
 from requests import Response
-from graph_db_interface.utils import utils
 from graph_db_interface.utils.graph_db_credentials import GraphDBCredentials
+from graph_db_interface.utils.iri import IRI
+from graph_db_interface.utils.types import GraphNameLike, GraphName
+from graph_db_interface.sparql_query import SPARQLQuery
 from graph_db_interface.exceptions import (
     InvalidRepositoryError,
     AuthenticationError,
     GraphDbException,
 )
+from graph_db_interface.utils.utils import convert_multi_bindings_to_python_type
 
 
 class GraphDB:
-    """A GraphDB interface that abstracts SPARQL queries and provides a small set of commonly needed queries."""
+    """
+    High-level client for GraphDB repositories.
+
+    Provides convenience methods for querying and updating data, manages
+    authentication, repository selection, a default named graph, and a
+    Kafka connector manager.
+    """
 
     def __init__(
         self,
         credentials: GraphDBCredentials,
         timeout: int = 60,
         use_gdb_token: bool = True,
-        named_graph: Optional[str] = None,
+        named_graph: Optional[GraphNameLike] = None,
         logger: Optional[logging.Logger] = None,
     ):
         if logger is None:
@@ -32,6 +42,7 @@ class GraphDB:
         self._credentials = credentials
         self._timeout = timeout
         self._auth = None
+        self._blank_ids = set()
 
         if use_gdb_token:
             self._auth = self._get_authentication_token(
@@ -47,12 +58,6 @@ class GraphDB:
 
         self.repository = credentials.repository
 
-        self._prefixes = {}
-        self.add_prefix("owl", "<http://www.w3.org/2002/07/owl#>")
-        self.add_prefix("rdf", "<http://www.w3.org/1999/02/22-rdf-syntax-ns#>")
-        self.add_prefix("rdfs", "<http://www.w3.org/2000/01/rdf-schema#>")
-        self.add_prefix("onto", "<http://www.ontotext.com/>")
-
         self.named_graph = named_graph
         self.kafka_manager = KafkaManager(db=self)
 
@@ -61,7 +66,16 @@ class GraphDB:
         )
 
     @classmethod
-    def from_env(cls, logger: Optional[logging.Logger] = None) -> "GraphDB":
+    def from_env(
+        cls,
+        logger: Optional[logging.Logger] = None,
+    ) -> GraphDB:
+        """
+        Construct a client using environment-based credentials.
+
+        Returns:
+            GraphDB: A configured `GraphDB` instance using `GraphDBCredentials.from_env()`.
+        """
         return cls(credentials=GraphDBCredentials.from_env(), logger=logger)
 
     from graph_db_interface.queries.named_graph import (
@@ -81,49 +95,91 @@ class GraphDB:
     )
     from graph_db_interface.queries.triple_multi import (
         triples_get,
+        any_triple_exists,
+        all_triple_exists,
         triples_add,
         triples_delete,
         triples_update,
     )
     from graph_db_interface.queries.ontology_helpers import (
         iri_exists,
+        new_iri,
+        new_blank_id,
         is_subclass,
         owl_is_named_individual,
         owl_get_classes_of_individual,
     )
 
     @property
-    def repository(self):
-        """The currently selected respository in the Graph DB instance."""
+    def repository(self) -> str:
+        """
+        The currently selected repository identifier.
+
+        Returns:
+            str: The active repository id.
+        """
         return self._repository
 
     @repository.setter
-    def repository(self, value: str):
+    def repository(
+        self,
+        value: str,
+    ):
         self._repository = self._validate_repository(value)
 
     @property
-    def named_graph(self):
-        """The currently selected named graph in the Graph DB instance."""
+    def named_graph(self) -> Optional[GraphName]:
+        """
+        The currently selected default named graph.
+
+        Returns:
+            Optional[IRI]: The default named graph as an `IRI`, or `None` if unset.
+        """
         return self._named_graph
 
     @named_graph.setter
-    def named_graph(self, value: Optional[str]):
-        if value is not None:
-            if utils.strip_angle_brackets(value) not in self.get_list_of_named_graphs():
-                self.logger.warning(
-                    f"Passed named graph {value} does not exist in the repository."
-                )
-            self._named_graph = utils.ensure_absolute(value)
-        else:
+    def named_graph(
+        self,
+        value: Optional[GraphNameLike],
+    ):
+        if value is None:
             self._named_graph = None
+            return
 
-    def get_list_of_repositories(
-        self, only_ids: bool = False
-    ) -> Union[List[str], List[dict], None]:
-        """Get a list of all existing repositories on the GraphDB instance.
+        value = IRI(value)
+
+        if value not in self.get_list_of_named_graphs():
+            self.logger.warning(
+                f"Passed named graph {value} does not exist in the repository."
+            )
+        self._named_graph = value
+
+    @property
+    def named_graph_str(self) -> Optional[str]:
+        """
+        The selected default named graph as a string.
 
         Returns:
-            Optional[List[str]]: Returns a list of repository ids.
+            Optional[str]: The IRI string of the default named graph, or `None`.
+        """
+        if self._named_graph is None:
+            return None
+        return str(self._named_graph)
+
+    def get_list_of_repositories(
+        self,
+        only_ids: Optional[bool] = False,
+    ) -> Union[List[str], List[dict], None]:
+        """
+        List repositories available on the GraphDB instance.
+
+        Args:
+            only_ids (Optional[bool]): When True, return only the repository ids. When False,
+                return the full repository descriptor objects. Defaults to False.
+
+        Returns:
+            Union[List[str], List[dict], None]: A list of ids if `only_ids=True`, a list of
+            repository descriptors otherwise, or `None` when the request fails.
         """
         response = self._make_request("get", "rest/repositories")
 
@@ -138,8 +194,22 @@ class GraphDB:
         )
         return None
 
-    def _validate_repository(self, repository: str) -> str:
-        """Validates if the repository is part of the RepositoryNames enum."""
+    def _validate_repository(
+        self,
+        repository: str,
+    ) -> str:
+        """
+        Validate that the repository exists on the server.
+
+        Args:
+            repository (str): The repository identifier to validate.
+
+        Returns:
+            str: The validated repository identifier.
+
+        Raises:
+            InvalidRepositoryError: If the repository is not available.
+        """
         if repository not in self._repositories:
             raise InvalidRepositoryError(
                 "Invalid repository name. Allowed values are:"
@@ -148,8 +218,24 @@ class GraphDB:
         return repository
 
     def _make_request(
-        self, method: str, endpoint: str, timeout: int = None, **kwargs
+        self,
+        method: str,
+        endpoint: str,
+        timeout: Optional[int] = None,
+        **kwargs,
     ) -> Response:
+        """
+        Perform an authenticated HTTP request to the GraphDB REST API.
+
+        Args:
+            method (str): The HTTP method (e.g., "get", "post").
+            endpoint (str): The REST endpoint path relative to `base_url`.
+            timeout (Optional[int]): Request timeout in seconds; defaults to the client setting.
+            **kwargs: Additional arguments forwarded to `requests`.
+
+        Returns:
+            Response: The `requests.Response` object.
+        """
         timeout = timeout if timeout is not None else self._timeout
 
         headers = kwargs.pop("headers", {})
@@ -164,18 +250,23 @@ class GraphDB:
             **kwargs,
         )
 
-    def _get_authentication_token(self, username: str, password: str) -> str:
-        """Obtain a GDB authentication token given your username and your password
+    def _get_authentication_token(
+        self,
+        username: str,
+        password: str,
+    ) -> str:
+        """
+        Obtain a GraphDB authentication token.
 
         Args:
-            username (str): username of your GraphDB account
-            password (str): password of your GraphDB account
-
-        Raises:
-            ValueError: raised when no token could be successfully obtained
+            username (str): The GraphDB username.
+            password (str): The GraphDB password.
 
         Returns:
-            str: gdb token
+            str: The `Authorization` header value (e.g., `Bearer ...`).
+
+        Raises:
+            AuthenticationError: If a token cannot be obtained with the provided credentials.
         """
         payload = {
             "username": username,
@@ -193,50 +284,37 @@ class GraphDB:
             " Please make sure, that your provided credentials are valid."
         )
 
-    def _get_prefix_string(self) -> str:
-        return (
-            "\n".join(
-                f"PREFIX {prefix}: {iri}" for prefix, iri in self._prefixes.items()
-            )
-            + "\n"
-        )
-
-    def _named_graph_string(self, named_graph: str = None) -> str:
-        if named_graph:
-            return f"GRAPH {named_graph}"
-
-        return ""
-
-    def add_prefix(self, prefix: str, iri: str):
-        self._prefixes[prefix] = utils.ensure_absolute(iri)
-
-    def remove_prefix(self, prefix: str) -> bool:
-        if prefix in self._prefixes:
-            del self._prefixes[prefix]
-            return True
-        return False
-
-    def get_prefixes(self) -> Dict[str, str]:
-        return self._prefixes
-
     def query(
         self,
-        query: str,
-        update: bool = False,
+        query: Union[SPARQLQuery, str],
+        update: Optional[bool] = False,
+        convert_bindings: Optional[bool] = False,
     ) -> Optional[Union[Dict, bool]]:
         """
-        Executes a SPARQL query or update operation on the GraphDB repository.
+        Execute a SPARQL query or update against the repository.
+
         Args:
-            query (str): The SPARQL query or update string to be executed.
-            update (bool, optional): Indicates whether the query is an update operation.
+            query (Union[SPARQLQuery, str]): The SPARQL query/update string to execute.
+            update (Optional[bool]): If True, perform an update; otherwise perform a read query.
                 Defaults to False.
+            convert_bindings (Optional[bool]): Whether to convert query result bindings to Python types.
+                Defaults to True.
+
         Returns:
-            Optional[Union[Dict, bool]]:
-                - If `update` is False, returns the query result as a dictionary (parsed JSON).
-                - If `update` is True, returns True if the update was successful.
-                - Returns None if the query fails and `update` is False.
-                - Returns False if the update fails and `update` is True.
+            Optional[Union[Dict, bool]]: If `update` is False, the parsed JSON result dict.
+            If `update` is True, `True` on success. Returns `None` or `False` only when
+            failures are handled upstream; otherwise an exception is raised.
+
+        Raises:
+            TypeError: If the `query` parameter is neither a `SPARQLQuery` nor a string.
+            InvalidQueryError: If the SPARQL query is malformed.
+            GraphDbException: If the HTTP request succeeds but the GraphDB API returns an error status.
         """
+        if isinstance(query, SPARQLQuery):
+            query = query.to_string()
+        elif not isinstance(query, str):
+            raise TypeError("Query must be a SPARQLQuery or a string.")
+
         endpoint = f"repositories/{self._repository}"
         headers = {
             "Content-Type": "application/sparql-query",
@@ -257,4 +335,22 @@ class GraphDB:
                 f"Error while querying GraphDB ({status_code}) - {response.text}"
             )
 
-        return True if update else response.json()
+        self.logger.debug(
+            f'Query\n"""\n{query}\n"""\nReturned\n{"Update successful (200)" if update else response.json()}'
+        )
+
+        if update:
+            return True
+
+        response = response.json()
+
+        if (
+            convert_bindings
+            and "results" in response
+            and "bindings" in response["results"]
+        ):
+            bindings = response["results"]["bindings"]
+            converted_bindings = convert_multi_bindings_to_python_type(bindings)
+            response["results"]["bindings"] = converted_bindings
+
+        return response

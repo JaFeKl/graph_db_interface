@@ -1,35 +1,43 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 import os
+
 
 @dataclass(frozen=True)
 class GraphDBCredentials:
     """
-    A class representing database credentials for connecting to a graph database.
+    Immutable credentials for connecting to a GraphDB instance.
 
-    Attributes:
-        host (str): The hostname or IP address of the database server.
-        username (str): The username for authenticating with the database.
-        password (str): The password for authenticating with the database.
-        database_name (str): The name of the specific database to connect to.
-        
+    Contains the base URL, user credentials, and target repository used by
+    the client to authenticate and perform SPARQL operations.
+
+    Args:
+        base_url (str): Base URL of the GraphDB instance (e.g., "http://localhost:7200").
+        username (str): Username for GraphDB authentication.
+        password (str): Password for GraphDB authentication.
+        repository (str): Repository identifier to target within the instance.
     """
+
     base_url: str
     username: str
     password: str
     repository: str
 
     @classmethod
-    def from_env(cls):
-        '''
-        Create a GraphDB instance using environment variables. The following environment variables must be set:
-        - `GRAPHDB_USERNAME`: The username for GraphDB authentication.
-        - `GRAPHDB_PASSWORD`: The password for GraphDB authentication.
-        - `GRAPHDB_URL`: The base URL of the GraphDB instance.
-        - `GRAPHDB_REPOSITORY`: The name of the GraphDB repository to use.
+    def from_env(cls) -> GraphDBCredentials:
+        """
+        Build credentials from environment variables.
+
+        The following environment variables must be set: `GRAPHDB_USERNAME`,
+        `GRAPHDB_PASSWORD`, `GRAPHDB_URL`, and `GRAPHDB_REPOSITORY`.
+
+        Returns:
+            GraphDBCredentials: A credentials instance populated from the environment.
 
         Raises:
-            ValueError: If any of the required environment variables are not set.
-        '''
+            ValueError: If any of the required environment variables are missing.
+        """
 
         if os.getenv("GRAPHDB_USERNAME") is None:
             raise ValueError("GRAPHDB_USERNAME environment variable is not set.")
@@ -49,13 +57,5 @@ class GraphDBCredentials:
             base_url=base_url,
             username=username,
             password=password,
-            repository=repository
+            repository=repository,
         )
-
-    def __iter__(self):
-        return iter((
-            self.base_url,
-            self.username,
-            self.password,
-            self.repository,
-        ))

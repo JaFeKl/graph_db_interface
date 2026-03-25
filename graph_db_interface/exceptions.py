@@ -1,52 +1,105 @@
 class GraphDBInterfaceError(Exception):
-    """Base class for exceptions in this module."""
+    """
+    Base exception for the GraphDB interface.
+
+    Serves as the common ancestor for all custom exceptions in this
+    package to allow catching them collectively when desired.
+    """
 
     pass
 
 
 class InvalidRepositoryError(GraphDBInterfaceError):
-    """Exception raised for invalid repository."""
+    """
+    Invalid repository configuration or selection.
 
-    def __init__(self, message: str):
+    Args:
+        message (str): Explanation of why the repository is invalid.
+    """
+
+    def __init__(
+        self,
+        message: str,
+    ):
         self.message = message
         super().__init__(self.message)
 
 
 class AuthenticationError(GraphDBInterfaceError):
-    """Exception raised for authentication errors."""
+    """
+    Authentication failure when communicating with GraphDB.
 
-    def __init__(self, message: str):
+    Args:
+        message (str): Details about the authentication error.
+    """
+
+    def __init__(
+        self,
+        message: str,
+    ):
         self.message = message
         super().__init__(self.message)
 
 
 class InvalidQueryError(GraphDBInterfaceError):
-    """Exception raised for invalid SPARQL queries."""
+    """
+    Invalid SPARQL query or update string.
 
-    def __init__(self, message: str):
+    Args:
+        message (str): Description of why the query is invalid.
+    """
+
+    def __init__(
+        self,
+        message: str,
+    ):
         self.message = message
         super().__init__(self.message)
 
 
 class InvalidInputError(GraphDBInterfaceError):
-    """Exception raised for invalid input."""
+    """
+    Invalid input provided to an interface method.
 
-    def __init__(self, message: str):
+    Args:
+        message (str): Explanation of the invalid input condition.
+    """
+
+    def __init__(
+        self,
+        message: str,
+    ):
         self.message = message
         super().__init__(self.message)
 
 
 class InvalidIRIError(GraphDBInterfaceError):
-    """Exception raised for invalid IRIs."""
+    """
+    Invalid IRI value or format encountered.
 
-    def __init__(self, message: str):
+    Args:
+        message (str): Description of the IRI validation failure.
+    """
+
+    def __init__(
+        self,
+        message: str,
+    ):
         self.message = message
         super().__init__(self.message)
-        
-        
+
+
 class GraphDbException(GraphDBInterfaceError):
-    """Exception raised for general GraphDB errors."""
-    
-    def __init__(self, message: str):
+    """
+    General error raised for HTTP or runtime issues with GraphDB.
+
+    Args:
+        message (str): The error message returned or constructed for the failure.
+    """
+
+    def __init__(
+        self,
+        message: str,
+    ):
         self.message = message
         super().__init__(self.message)
