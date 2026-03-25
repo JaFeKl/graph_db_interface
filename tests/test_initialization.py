@@ -24,9 +24,11 @@ def test_credentials_from_environment(db: GraphDB):
         os.getenv("GRAPHDB_URL") is None
         or os.getenv("GRAPHDB_USERNAME") is None
         or os.getenv("GRAPHDB_PASSWORD") is None
-        or os.getenv("GRAPHDB_REPOSITORY") is None
+        or os.getenv("GRAPHDB_TEST_REPOSITORY") is None
     ):
         pytest.skip("One or more environment variables are not set")
+
+    os.environ["GRAPHDB_REPOSITORY"] = os.getenv("GRAPHDB_TEST_REPOSITORY")
 
     try:
         credentials = GraphDBCredentials.from_env()

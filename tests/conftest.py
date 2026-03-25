@@ -1,4 +1,3 @@
-import json
 import os
 import sys
 import pytest
@@ -12,12 +11,26 @@ def db() -> GraphDB:
         "GRAPHDB_URL",
         "GRAPHDB_USERNAME",
         "GRAPHDB_PASSWORD",
-        "GRAPHDB_REPOSITORY",
+        "GRAPHDB_TEST_REPOSITORY",
     ]:
         if os.getenv(env_var) is None:
             print(f"Missing environment variable '{env_var}'.", file=sys.stderr)
             sys.exit(1)
 
-    credentials = GraphDBCredentials.from_env()
+    credentials = GraphDBCredentials(
+        base_url=os.getenv("GRAPHDB_URL"),
+        username=os.getenv("GRAPHDB_USERNAME"),
+        password=os.getenv("GRAPHDB_PASSWORD"),
+        repository=os.getenv("GRAPHDB_TEST_REPOSITORY"),
+    )
 
-    return GraphDB(credentials=credentials)
+    db = GraphDB(credentials=credentials)
+
+    for graph in [
+        None,
+        "http://example.org/named_graph",
+        "http://example.org/local_named_graph",
+    ]:
+        db.clear_graph(graph)
+
+    return db

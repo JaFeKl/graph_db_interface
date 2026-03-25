@@ -13,9 +13,9 @@ jobs:
 
     env:
       GRAPHDB_URL: http://localhost:7200
-      GRAPHDB_REPOSITORY: test-repo
       GRAPHDB_USERNAME: admin
       GRAPHDB_PASSWORD: root
+      GRAPHDB_TEST_REPOSITORY: test-repo
     
     services:
       graphdb:
@@ -58,14 +58,14 @@ jobs:
 
     - name: Create test repository
       run: |
-        cat > repo-config.ttl << 'EOF'
+        cat > repo-config.ttl << EOF
         @prefix rep: <http://www.openrdf.org/config/repository#> .
         @prefix sr: <http://www.openrdf.org/config/repository/sail#> .
         @prefix sail: <http://www.openrdf.org/config/sail#> .
         @prefix owlim: <http://www.ontotext.com/trree/owlim#> .
 
         [] a rep:Repository ;
-           rep:repositoryID "test-repo" ;
+           rep:repositoryID "${GRAPHDB_TEST_REPOSITORY}" ;
            rdfs:label "Test Repository" ;
           rep:repositoryImpl [
               rep:repositoryType "graphdb:SailRepository";
