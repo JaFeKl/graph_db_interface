@@ -181,7 +181,6 @@ def all_triple_exists(
     Returns:
         bool: True if all exist, False otherwise.
     """
-    self.logger.setLevel(10)
     named_graph = IRI(named_graph) if named_graph is not None else self.named_graph
 
     if not triples:
